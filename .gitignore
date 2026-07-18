@@ -1,0 +1,19 @@
+node_modules/
+dist/
+*.log
+
+# env
+.env
+.env.local
+
+# database
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+
+# uploads (keep folder, ignore contents)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# editor
+.vscode/
+.idea/
