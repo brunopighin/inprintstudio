@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { User, Lock, ShoppingBag, LogOut, ChevronRight } from 'lucide-react'
+import { User, Lock, ShoppingBag, LogOut, ChevronRight, Truck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { Order, ORDER_STATUS_LABELS, OrderStatus } from '../types'
+import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS } from '../types'
 import api from '../services/api'
 import logo from '../assets/logo.png'
 
@@ -122,6 +122,20 @@ export default function Account({ adminMode }: Props) {
                             <p>{order.items.length} producto{order.items.length !== 1 ? 's' : ''}</p>
                             <p className="font-bold text-black mt-1">${order.total.toLocaleString('es-AR')}</p>
                           </div>
+                          {order.trackingNumber && (
+                            <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2 text-sm">
+                              <Truck size={14} className="text-gray-400" />
+                              <span className="text-gray-600">{CARRIER_LABELS[order.trackingCarrier as Carrier]} · <span className="font-mono">{order.trackingNumber}</span></span>
+                              <a
+                                href={CARRIER_TRACKING_URLS[order.trackingCarrier as Carrier]}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="ml-auto text-xs font-semibold underline text-blue-600"
+                              >
+                                Seguir envío
+                              </a>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

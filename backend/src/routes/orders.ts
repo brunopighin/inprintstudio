@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { optionalAuth, authenticate, AuthRequest } from '../middleware/auth'
+import { calculateShippingCost, quoteShipping } from '../utils/shipping'
 
 const router = Router()
 const prisma = new PrismaClient()
@@ -15,14 +16,14 @@ function generateOrderNumber() {
 
 router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { customerName, customerEmail, customerPhone, items, shippingMethod, paymentMethod, shippingAddress, notes } = req.body
+    const { customerName, customerEmail, customerPhone, items, shippingMethod, paymentMethod, shippingAddress, postalCode, notes } = req.body
 
     if (!customerName || !customerEmail || !items?.length) {
       res.status(400).json({ error: 'Datos incompletos' })
       return
     }
 
-    const SHIPPING_COST = shippingMethod === 'pickup' ? 0 : 800
+    const SHIPPING_COST = calculateShippingCost(shippingMethod, postalCode)
 
     let subtotal = 0
     const orderItems = []
@@ -58,6 +59,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         shippingMethod,
         paymentMethod,
         shippingAddress: shippingAddress || null,
+        postalCode: postalCode || null,
         notes: notes || null,
         items: { create: orderItems },
       },
@@ -69,6 +71,16 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     console.error(err)
     res.status(500).json({ error: 'Error al crear pedido' })
   }
+})
+
+router.get('/shipping-quote', async (req, res: Response) => {
+  const postalCode = String(req.query.postalCode || '')
+  const quote = quoteShipping(postalCode)
+  if (!quote) {
+    res.status(404).json({ error: 'Código postal no reconocido' })
+    return
+  }
+  res.json(quote)
 })
 
 router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {

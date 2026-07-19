@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { requireAdmin, AuthRequest } from '../../middleware/auth'
+import { CARRIERS } from '../../utils/shipping'
 
 const router = Router()
 const prisma = new PrismaClient()
@@ -63,6 +64,27 @@ router.patch('/:id/status', requireAdmin, async (req: AuthRequest, res: Response
     res.json(order)
   } catch {
     res.status(500).json({ error: 'Error al actualizar estado' })
+  }
+})
+
+router.patch('/:id/tracking', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { trackingCarrier, trackingNumber } = req.body
+    if (!CARRIERS.includes(trackingCarrier)) {
+      res.status(400).json({ error: 'Correo inválido' })
+      return
+    }
+    if (!trackingNumber || !String(trackingNumber).trim()) {
+      res.status(400).json({ error: 'Número de seguimiento requerido' })
+      return
+    }
+    const order = await prisma.order.update({
+      where: { id: req.params.id },
+      data: { trackingCarrier, trackingNumber: String(trackingNumber).trim() },
+    })
+    res.json(order)
+  } catch {
+    res.status(500).json({ error: 'Error al actualizar seguimiento' })
   }
 })
 

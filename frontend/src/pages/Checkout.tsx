@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, Truck, Store, CreditCard, ArrowLeft } from 'lucide-react'
 import { useCart } from '../context/CartContext'
@@ -21,12 +21,44 @@ export default function Checkout() {
     customerPhone: user?.phone || '',
     shippingMethod: 'pickup' as 'pickup' | 'shipping' | 'courier',
     shippingAddress: '',
+    postalCode: '',
     paymentMethod: 'mercadopago' as 'mercadopago' | 'transfer',
     notes: '',
   })
 
+  const [shippingQuote, setShippingQuote] = useState<{ zone: string; cost: number } | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
+  const [quoteError, setQuoteError] = useState('')
+
   const update = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
-  const shippingCost = form.shippingMethod === 'pickup' ? 0 : 800
+
+  useEffect(() => {
+    if (form.shippingMethod === 'pickup') {
+      setShippingQuote(null)
+      setQuoteError('')
+      return
+    }
+    const cp = form.postalCode.trim()
+    if (cp.length < 4) {
+      setShippingQuote(null)
+      setQuoteError('')
+      return
+    }
+    setQuoteLoading(true)
+    setQuoteError('')
+    const timeout = setTimeout(() => {
+      api.get('/orders/shipping-quote', { params: { postalCode: cp } })
+        .then(({ data }) => setShippingQuote(data))
+        .catch(() => {
+          setShippingQuote(null)
+          setQuoteError('No pudimos calcular el envío para ese código postal')
+        })
+        .finally(() => setQuoteLoading(false))
+    }, 500)
+    return () => clearTimeout(timeout)
+  }, [form.postalCode, form.shippingMethod])
+
+  const shippingCost = form.shippingMethod === 'pickup' ? 0 : (shippingQuote?.cost ?? 0)
   const grandTotal = total + shippingCost
 
   const handleSubmit = async () => {
@@ -162,9 +194,9 @@ export default function Checkout() {
                   <h2 className="font-bold text-xl mb-6">Método de entrega</h2>
                   <div className="space-y-3">
                     {[
-                      { key: 'pickup', icon: Store, label: 'Retiro en local', desc: 'Gratis · Av. Ejemplo 1234, La Plata', cost: 0 },
-                      { key: 'shipping', icon: Truck, label: 'Envío a domicilio', desc: 'Andreani / OCA · 3-7 días hábiles', cost: 800 },
-                      { key: 'courier', icon: Truck, label: 'Correo Argentino', desc: 'Para todo el interior del país', cost: 800 },
+                      { key: 'pickup', icon: Store, label: 'Retiro en local', desc: 'Gratis · Av. Ejemplo 1234, La Plata' },
+                      { key: 'shipping', icon: Truck, label: 'Envío a domicilio', desc: 'Andreani · 3-7 días hábiles' },
+                      { key: 'courier', icon: Truck, label: 'Correo Argentino', desc: 'Para todo el interior del país' },
                     ].map(opt => (
                       <label key={opt.key} className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-colors ${form.shippingMethod === opt.key ? 'border-black' : 'border-gray-200 hover:border-gray-400'}`}>
                         <input type="radio" name="shipping" value={opt.key} checked={form.shippingMethod === opt.key as 'pickup' | 'shipping' | 'courier'} onChange={() => update('shippingMethod', opt.key)} className="sr-only" />
@@ -173,15 +205,26 @@ export default function Checkout() {
                           <p className="font-semibold text-sm">{opt.label}</p>
                           <p className="text-xs text-gray-500">{opt.desc}</p>
                         </div>
-                        <span className="font-bold text-sm">{opt.cost === 0 ? 'Gratis' : formatPrice(opt.cost)}</span>
+                        <span className="font-bold text-sm">{opt.key === 'pickup' ? 'Gratis' : 'Según CP'}</span>
                       </label>
                     ))}
                   </div>
 
                   {form.shippingMethod !== 'pickup' && (
-                    <div className="mt-5">
-                      <label className="label">Dirección de envío *</label>
-                      <textarea className="input-base resize-none" rows={3} value={form.shippingAddress} onChange={e => update('shippingAddress', e.target.value)} placeholder="Calle, número, piso, depto, ciudad, provincia, código postal" />
+                    <div className="mt-5 space-y-4">
+                      <div>
+                        <label className="label">Código postal *</label>
+                        <input className="input-base max-w-[180px]" value={form.postalCode} onChange={e => update('postalCode', e.target.value)} placeholder="Ej: 1900" />
+                        {quoteLoading && <p className="text-xs text-gray-400 mt-1">Calculando costo de envío...</p>}
+                        {!quoteLoading && shippingQuote && (
+                          <p className="text-xs text-gray-600 mt-1">Zona: {shippingQuote.zone} · Costo: {formatPrice(shippingQuote.cost)}</p>
+                        )}
+                        {!quoteLoading && quoteError && <p className="text-xs text-red-600 mt-1">{quoteError}</p>}
+                      </div>
+                      <div>
+                        <label className="label">Dirección de envío *</label>
+                        <textarea className="input-base resize-none" rows={3} value={form.shippingAddress} onChange={e => update('shippingAddress', e.target.value)} placeholder="Calle, número, piso, depto, ciudad, provincia" />
+                      </div>
                     </div>
                   )}
 
@@ -192,7 +235,7 @@ export default function Checkout() {
 
                   <button
                     onClick={() => setStep('payment')}
-                    disabled={form.shippingMethod !== 'pickup' && !form.shippingAddress}
+                    disabled={form.shippingMethod !== 'pickup' && (!form.shippingAddress || !shippingQuote)}
                     className="btn-primary w-full mt-6"
                   >
                     Continuar
@@ -269,7 +312,11 @@ export default function Checkout() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Envío</span>
-                  <span>{shippingCost === 0 ? 'Gratis' : formatPrice(shippingCost)}</span>
+                  <span>
+                    {form.shippingMethod === 'pickup'
+                      ? 'Gratis'
+                      : shippingQuote ? formatPrice(shippingCost) : 'A calcular'}
+                  </span>
                 </div>
                 <div className="flex justify-between font-black text-lg pt-2 border-t border-gray-200">
                   <span>Total</span>

@@ -53,6 +53,18 @@ export interface Product {
 
 export type OrderStatus = 'RECEIVED' | 'IN_PRODUCTION' | 'READY' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED'
 
+export type Carrier = 'correo_argentino' | 'andreani'
+
+export const CARRIER_LABELS: Record<Carrier, string> = {
+  correo_argentino: 'Correo Argentino',
+  andreani: 'Andreani',
+}
+
+export const CARRIER_TRACKING_URLS: Record<Carrier, string> = {
+  correo_argentino: 'https://www.correoargentino.com.ar/formularios/e-commerce',
+  andreani: 'https://www.andreani.com/?tab=seguir-envio',
+}
+
 export interface OrderItem {
   id: string
   productId: string
@@ -80,6 +92,9 @@ export interface Order {
   shippingMethod: string
   paymentMethod: string
   shippingAddress?: string
+  postalCode?: string
+  trackingCarrier?: Carrier
+  trackingNumber?: string
   notes?: string
   createdAt: string
   updatedAt: string

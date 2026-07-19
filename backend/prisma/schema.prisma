@@ -95,6 +95,9 @@ model Order {
   shippingMethod  String
   paymentMethod   String
   shippingAddress String?
+  postalCode      String?
+  trackingCarrier String?
+  trackingNumber  String?
   notes           String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt

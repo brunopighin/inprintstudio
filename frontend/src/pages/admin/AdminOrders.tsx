@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Search, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, X, Truck } from 'lucide-react'
 import api from '../../services/api'
-import { Order, ORDER_STATUS_LABELS, OrderStatus } from '../../types'
+import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS } from '../../types'
 
 const STATUSES: { key: string; label: string }[] = [
   { key: 'ALL', label: 'Todos' },
@@ -28,6 +28,8 @@ export default function AdminOrders() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [trackingDrafts, setTrackingDrafts] = useState<Record<string, { carrier: Carrier; number: string }>>({})
+  const [savingTracking, setSavingTracking] = useState<string | null>(null)
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -55,6 +57,25 @@ export default function AdminOrders() {
     if (!confirm('¿Cancelar este pedido?')) return
     await api.patch(`/admin/orders/${order.id}/status`, { status: 'CANCELLED' })
     fetchOrders()
+  }
+
+  const draftFor = (order: Order) =>
+    trackingDrafts[order.id] || { carrier: order.trackingCarrier || 'correo_argentino', number: order.trackingNumber || '' }
+
+  const updateDraft = (orderId: string, patch: Partial<{ carrier: Carrier; number: string }>) => {
+    setTrackingDrafts(d => ({ ...d, [orderId]: { ...draftFor({ id: orderId } as Order), ...d[orderId], ...patch } }))
+  }
+
+  const saveTracking = async (order: Order) => {
+    const draft = draftFor(order)
+    if (!draft.number.trim()) return
+    setSavingTracking(order.id)
+    try {
+      await api.patch(`/admin/orders/${order.id}/tracking`, { trackingCarrier: draft.carrier, trackingNumber: draft.number.trim() })
+      fetchOrders()
+    } finally {
+      setSavingTracking(null)
+    }
   }
 
   return (
@@ -173,8 +194,50 @@ export default function AdminOrders() {
                                 <p>Envío: {order.shippingMethod === 'pickup' ? 'Retiro en local' : 'Envío a domicilio'}</p>
                                 <p>Pago: {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : 'Transferencia'}</p>
                                 {order.shippingAddress && <p>Dirección: {order.shippingAddress}</p>}
+                                {order.postalCode && <p>Código postal: {order.postalCode}</p>}
                                 {order.notes && <p>Notas: {order.notes}</p>}
                               </div>
+
+                              {order.shippingMethod !== 'pickup' && (
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-1.5">
+                                    <Truck size={12} /> Seguimiento de envío
+                                  </p>
+                                  {order.trackingNumber && (
+                                    <p className="text-sm mb-2">
+                                      {CARRIER_LABELS[order.trackingCarrier as Carrier]} · <span className="font-mono">{order.trackingNumber}</span>
+                                      {' '}
+                                      <a href={CARRIER_TRACKING_URLS[order.trackingCarrier as Carrier]} target="_blank" rel="noreferrer" className="underline text-blue-600">
+                                        rastrear
+                                      </a>
+                                    </p>
+                                  )}
+                                  <div className="flex flex-wrap gap-2 items-center">
+                                    <select
+                                      className="input-base py-1.5 text-sm w-auto"
+                                      value={draftFor(order).carrier}
+                                      onChange={e => updateDraft(order.id, { carrier: e.target.value as Carrier })}
+                                    >
+                                      {Object.entries(CARRIER_LABELS).map(([key, label]) => (
+                                        <option key={key} value={key}>{label}</option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      className="input-base py-1.5 text-sm w-auto"
+                                      placeholder="Número de seguimiento"
+                                      value={draftFor(order).number}
+                                      onChange={e => updateDraft(order.id, { number: e.target.value })}
+                                    />
+                                    <button
+                                      onClick={() => saveTracking(order)}
+                                      disabled={savingTracking === order.id || !draftFor(order).number.trim()}
+                                      className="text-xs bg-black text-white px-3 py-1.5 hover:bg-gray-800 transition-colors disabled:opacity-50"
+                                    >
+                                      {savingTracking === order.id ? 'Guardando...' : 'Guardar'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
