@@ -45,7 +45,7 @@ app.use('/api/admin/promotions', adminPromotionRoutes)
 app.use('/api/admin/banners', adminBannerRoutes)
 app.use('/api/admin/upload', adminUploadRoutes)
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date() }))
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date(), uptime: process.uptime() }))
 
 app.listen(PORT, () => {
   console.log(`🚀 In Print API running on http://localhost:${PORT}`)
