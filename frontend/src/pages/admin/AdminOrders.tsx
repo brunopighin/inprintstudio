@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Search, ChevronDown, ChevronUp, X, Truck } from 'lucide-react'
 import api from '../../services/api'
-import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS } from '../../types'
+import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS } from '../../types'
 
 const STATUSES: { key: string; label: string }[] = [
   { key: 'ALL', label: 'Todos' },
@@ -192,7 +192,17 @@ export default function AdminOrders() {
                               <div className="text-sm space-y-1 text-gray-600">
                                 <p>Teléfono: {order.customerPhone || '—'}</p>
                                 <p>Envío: {order.shippingMethod === 'pickup' ? 'Retiro en local' : 'Envío a domicilio'}</p>
-                                <p>Pago: {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : 'Transferencia'}</p>
+                                <p>
+                                  Pago: {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : 'Transferencia'}
+                                  {' · '}
+                                  <span className={
+                                    order.paymentStatus === 'APPROVED' ? 'text-green-600 font-semibold'
+                                    : order.paymentStatus === 'REJECTED' ? 'text-red-600 font-semibold'
+                                    : 'text-gray-500'
+                                  }>
+                                    {PAYMENT_STATUS_LABELS[order.paymentStatus]}
+                                  </span>
+                                </p>
                                 {order.shippingAddress && <p>Dirección: {order.shippingAddress}</p>}
                                 {order.postalCode && <p>Código postal: {order.postalCode}</p>}
                                 {order.notes && <p>Notas: {order.notes}</p>}

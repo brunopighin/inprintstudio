@@ -7,6 +7,7 @@ import Home from './pages/Home'
 import Catalog from './pages/Catalog'
 import ProductDetail from './pages/ProductDetail'
 import Checkout from './pages/Checkout'
+import CheckoutResult from './pages/CheckoutResult'
 import Account from './pages/Account'
 import Contact from './pages/Contact'
 import AdminLayout from './components/layout/AdminLayout'
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/catalogo/:category" element={<><Header /><CartDrawer /><Catalog /><Footer /></>} />
         <Route path="/producto/:slug" element={<><Header /><CartDrawer /><ProductDetail /><Footer /></>} />
         <Route path="/checkout" element={<><Header /><Checkout /><Footer /></>} />
+        <Route path="/checkout/resultado" element={<><Header /><CheckoutResult /><Footer /></>} />
         <Route path="/mi-cuenta" element={<><Header /><Account /><Footer /></>} />
         <Route path="/contacto" element={<><Header /><Contact /><Footer /></>} />
 

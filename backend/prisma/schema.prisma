@@ -94,6 +94,9 @@ model Order {
   total           Float
   shippingMethod  String
   paymentMethod   String
+  paymentStatus   String      @default("PENDING")
+  mpPreferenceId  String?
+  mpPaymentId     String?
   shippingAddress String?
   postalCode      String?
   trackingCarrier String?

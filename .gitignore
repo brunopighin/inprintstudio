@@ -17,3 +17,6 @@ backend/uploads/*
 # editor
 .vscode/
 .idea/
+
+# Claude Code local state
+.claude/

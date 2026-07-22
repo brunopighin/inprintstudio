@@ -6,6 +6,7 @@ import { authRoutes } from './routes/auth'
 import { productRoutes } from './routes/products'
 import { categoryRoutes } from './routes/categories'
 import { orderRoutes } from './routes/orders'
+import { paymentRoutes } from './routes/payments'
 import { bannerRoutes } from './routes/banners'
 import { adminDashboardRoutes } from './routes/admin/dashboard'
 import { adminProductRoutes } from './routes/admin/products'
@@ -33,6 +34,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)
 app.use('/api/orders', orderRoutes)
+app.use('/api/payments', paymentRoutes)
 app.use('/api/banners', bannerRoutes)
 
 // Admin routes

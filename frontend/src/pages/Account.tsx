@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { User, Lock, ShoppingBag, LogOut, ChevronRight, Truck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS } from '../types'
+import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS } from '../types'
 import api from '../services/api'
 import logo from '../assets/logo.png'
 
@@ -121,6 +121,11 @@ export default function Account({ adminMode }: Props) {
                           <div className="text-sm text-gray-600">
                             <p>{order.items.length} producto{order.items.length !== 1 ? 's' : ''}</p>
                             <p className="font-bold text-black mt-1">${order.total.toLocaleString('es-AR')}</p>
+                            {order.paymentMethod === 'mercadopago' && (
+                              <p className={`text-xs mt-1 ${order.paymentStatus === 'APPROVED' ? 'text-green-600' : order.paymentStatus === 'REJECTED' ? 'text-red-600' : 'text-gray-400'}`}>
+                                {PAYMENT_STATUS_LABELS[order.paymentStatus]}
+                              </p>
+                            )}
                           </div>
                           {order.trackingNumber && (
                             <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2 text-sm">

@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { optionalAuth, authenticate, AuthRequest } from '../middleware/auth'
 import { calculateShippingCost, quoteShipping } from '../utils/shipping'
+import { preferenceClient } from '../utils/mercadopago'
 
 const router = Router()
 const prisma = new PrismaClient()
@@ -27,6 +28,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     let subtotal = 0
     const orderItems = []
+    const preferenceItems = []
     for (const item of items) {
       const variant = await prisma.productVariant.findUnique({ where: { id: item.variantId } })
       const product = await prisma.product.findUnique({ where: { id: item.productId } })
@@ -40,6 +42,13 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         price,
         photoUrl: item.photoUrl || null,
         notes: item.notes || null,
+      })
+      preferenceItems.push({
+        id: item.variantId || item.productId,
+        title: variant ? `${product.name} (${variant.label})` : product.name,
+        quantity: item.quantity,
+        unit_price: price,
+        currency_id: 'ARS',
       })
     }
 
@@ -65,6 +74,32 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       },
       include: { items: { include: { product: true, variant: true } } },
     })
+
+    if (paymentMethod === 'mercadopago' && process.env.MP_ACCESS_TOKEN) {
+      if (SHIPPING_COST > 0) {
+        preferenceItems.push({ id: 'shipping', title: 'Envío', quantity: 1, unit_price: SHIPPING_COST, currency_id: 'ARS' })
+      }
+      const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5175').replace(/\/$/, '')
+      const preference = await preferenceClient.create({
+        body: {
+          items: preferenceItems,
+          external_reference: order.id,
+          back_urls: {
+            success: `${frontendUrl}/checkout/resultado?estado=success&pedido=${order.orderNumber}`,
+            failure: `${frontendUrl}/checkout/resultado?estado=failure&pedido=${order.orderNumber}`,
+            pending: `${frontendUrl}/checkout/resultado?estado=pending&pedido=${order.orderNumber}`,
+          },
+          auto_return: 'approved',
+          notification_url: `https://${req.get('host')}/api/payments/mercadopago/webhook`,
+        },
+      })
+      await prisma.order.update({ where: { id: order.id }, data: { mpPreferenceId: preference.id } })
+      res.status(201).json({
+        ...order,
+        checkoutUrl: preference.sandbox_init_point || preference.init_point,
+      })
+      return
+    }
 
     res.status(201).json(order)
   } catch (err) {

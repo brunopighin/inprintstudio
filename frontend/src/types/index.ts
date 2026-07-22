@@ -91,6 +91,7 @@ export interface Order {
   total: number
   shippingMethod: string
   paymentMethod: string
+  paymentStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'IN_PROCESS'
   shippingAddress?: string
   postalCode?: string
   trackingCarrier?: Carrier
@@ -124,4 +125,11 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   SHIPPED: 'Enviado',
   DELIVERED: 'Entregado',
   CANCELLED: 'Cancelado',
+}
+
+export const PAYMENT_STATUS_LABELS: Record<Order['paymentStatus'], string> = {
+  PENDING: 'Pago pendiente',
+  IN_PROCESS: 'Pago en proceso',
+  APPROVED: 'Pago aprobado',
+  REJECTED: 'Pago rechazado',
 }

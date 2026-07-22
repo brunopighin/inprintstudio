@@ -75,6 +75,13 @@ export default function Checkout() {
         ...form,
         items: orderItems,
       })
+
+      if (form.paymentMethod === 'mercadopago' && data.checkoutUrl) {
+        clearCart()
+        window.location.href = data.checkoutUrl
+        return
+      }
+
       setOrderNumber(data.orderNumber)
       clearCart()
       setStep('confirm')
@@ -270,7 +277,11 @@ export default function Checkout() {
                   {error && <p className="text-red-600 text-sm mb-4 bg-red-50 border border-red-200 p-3">{error}</p>}
 
                   <button onClick={handleSubmit} disabled={loading} className="btn-primary w-full py-4">
-                    {loading ? 'Procesando...' : `Confirmar pedido · ${formatPrice(grandTotal)}`}
+                    {loading
+                      ? 'Procesando...'
+                      : form.paymentMethod === 'mercadopago'
+                        ? `Ir a pagar con MercadoPago · ${formatPrice(grandTotal)}`
+                        : `Confirmar pedido · ${formatPrice(grandTotal)}`}
                   </button>
 
                   <p className="text-xs text-gray-400 text-center mt-3">
