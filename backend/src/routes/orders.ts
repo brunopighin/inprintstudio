@@ -83,6 +83,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       const preference = await preferenceClient.create({
         body: {
           items: preferenceItems,
+          payer: { name: customerName, email: customerEmail },
           external_reference: order.id,
           back_urls: {
             success: `${frontendUrl}/checkout/resultado?estado=success&pedido=${order.orderNumber}`,
