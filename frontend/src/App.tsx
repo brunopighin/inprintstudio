@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
@@ -19,6 +20,14 @@ import AdminUsers from './pages/admin/AdminUsers'
 import AdminPromotions from './pages/admin/AdminPromotions'
 import AdminBanners from './pages/admin/AdminBanners'
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+  return null
+}
+
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" /></div>
@@ -29,6 +38,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <>
+      <ScrollToTop />
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<><Header /><CartDrawer /><Home /><Footer /></>} />
