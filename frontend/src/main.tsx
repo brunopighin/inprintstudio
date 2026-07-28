@@ -21,3 +21,6 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>
 )
+
+window.scrollTo(0, 0)
+document.getElementById('preloader')?.remove()
