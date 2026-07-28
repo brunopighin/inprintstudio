@@ -26,8 +26,8 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Hero Banner */}
-      {banners.length > 0 && (
-        <section className="relative h-[70vh] min-h-[500px] max-h-[800px] overflow-hidden bg-black">
+      <section className="relative h-[70vh] min-h-[500px] max-h-[800px] overflow-hidden bg-black">
+          {banners.length === 0 && <div className="absolute inset-0 skeleton" />}
           {banners.map((banner, idx) => (
             <div
               key={banner.id}
@@ -79,8 +79,7 @@ export default function Home() {
               </div>
             </>
           )}
-        </section>
-      )}
+      </section>
 
       {/* Features strip */}
       <section className="bg-black text-white py-10">
@@ -106,62 +105,66 @@ export default function Home() {
       </section>
 
       {/* Categories */}
-      {categories.length > 0 && (
-        <section className="py-20 container-main">
+      <section className="py-20 container-main">
+        <div className="flex items-end justify-between mb-10">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Explorá</p>
+            <h2 className="section-title">Nuestros productos</h2>
+          </div>
+          <Link to="/catalogo" className="hidden sm:flex items-center gap-1 text-sm font-medium hover:gap-3 transition-all">
+            Ver todo <ArrowRight size={16} />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {categories.length === 0
+            ? Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="aspect-square skeleton" />
+              ))
+            : categories.map(cat => (
+                <Link
+                  key={cat.id}
+                  to={`/catalogo/${cat.slug}`}
+                  className="group relative aspect-square bg-gray-100 overflow-hidden"
+                >
+                  {cat.image && (
+                    <img
+                      src={cat.image}
+                      alt={cat.name}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3">
+                    <p className="text-white font-bold text-sm leading-tight">{cat.name}</p>
+                  </div>
+                </Link>
+              ))}
+        </div>
+      </section>
+
+      {/* Featured products */}
+      <section className="py-16 bg-gray-50">
+        <div className="container-main">
           <div className="flex items-end justify-between mb-10">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Explorá</p>
-              <h2 className="section-title">Nuestros productos</h2>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Lo más pedido</p>
+              <h2 className="section-title">Destacados</h2>
             </div>
             <Link to="/catalogo" className="hidden sm:flex items-center gap-1 text-sm font-medium hover:gap-3 transition-all">
-              Ver todo <ArrowRight size={16} />
+              Ver catálogo <ArrowRight size={16} />
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {categories.map(cat => (
-              <Link
-                key={cat.id}
-                to={`/catalogo/${cat.slug}`}
-                className="group relative aspect-square bg-gray-100 overflow-hidden"
-              >
-                {cat.image && (
-                  <img
-                    src={cat.image}
-                    alt={cat.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-3">
-                  <p className="text-white font-bold text-sm leading-tight">{cat.name}</p>
-                </div>
-              </Link>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {featured.length === 0
+              ? Array.from({ length: 8 }).map((_, idx) => (
+                  <div key={idx} className="aspect-square skeleton" />
+                ))
+              : featured.map(p => <ProductCard key={p.id} product={p} />)}
           </div>
-        </section>
-      )}
-
-      {/* Featured products */}
-      {featured.length > 0 && (
-        <section className="py-16 bg-gray-50">
-          <div className="container-main">
-            <div className="flex items-end justify-between mb-10">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Lo más pedido</p>
-                <h2 className="section-title">Destacados</h2>
-              </div>
-              <Link to="/catalogo" className="hidden sm:flex items-center gap-1 text-sm font-medium hover:gap-3 transition-all">
-                Ver catálogo <ArrowRight size={16} />
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {featured.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* How it works */}
       <section className="py-20 container-main">
