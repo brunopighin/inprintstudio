@@ -10,6 +10,9 @@ if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual'
 }
 
+const preloaderStart = performance.now()
+const MIN_PRELOADER_MS = 2500
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
@@ -23,4 +26,8 @@ createRoot(document.getElementById('root')!).render(
 )
 
 window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
-document.getElementById('preloader')?.remove()
+
+const elapsed = performance.now() - preloaderStart
+setTimeout(() => {
+  document.getElementById('preloader')?.remove()
+}, Math.max(0, MIN_PRELOADER_MS - elapsed))
