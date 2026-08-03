@@ -7,6 +7,8 @@ import { preferenceClient } from '../utils/mercadopago'
 const router = Router()
 const prisma = new PrismaClient()
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 function generateOrderNumber() {
   const date = new Date()
   const yy = date.getFullYear().toString().slice(-2)
@@ -21,6 +23,11 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     if (!customerName || !customerEmail || !items?.length) {
       res.status(400).json({ error: 'Datos incompletos' })
+      return
+    }
+
+    if (!EMAIL_RE.test(String(customerEmail).trim())) {
+      res.status(400).json({ error: 'Email inválido' })
       return
     }
 

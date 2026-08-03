@@ -7,6 +7,9 @@ import api from '../services/api'
 
 type Step = 'contact' | 'shipping' | 'payment' | 'confirm'
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const isValidEmail = (email: string) => EMAIL_RE.test(email.trim())
+
 export default function Checkout() {
   const { items, total, clearCart } = useCart()
   const { user } = useAuth()
@@ -177,6 +180,9 @@ export default function Checkout() {
                     <div>
                       <label className="label">Email *</label>
                       <input className="input-base" type="email" value={form.customerEmail} onChange={e => update('customerEmail', e.target.value)} placeholder="tu@email.com" />
+                      {form.customerEmail && !isValidEmail(form.customerEmail) && (
+                        <p className="text-red-600 text-xs mt-1">Ingresá un email válido</p>
+                      )}
                     </div>
                     <div>
                       <label className="label">Teléfono / WhatsApp</label>
@@ -184,7 +190,7 @@ export default function Checkout() {
                     </div>
                     <button
                       onClick={() => setStep('shipping')}
-                      disabled={!form.customerName || !form.customerEmail}
+                      disabled={!form.customerName || !isValidEmail(form.customerEmail)}
                       className="btn-primary w-full mt-2"
                     >
                       Continuar
