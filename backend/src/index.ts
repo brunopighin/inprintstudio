@@ -20,6 +20,7 @@ import { adminUploadRoutes } from './routes/admin/upload'
 dotenv.config()
 
 const app = express()
+app.set('trust proxy', 1)
 const PORT = process.env.PORT || 3004
 const CORS_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:5175').split(',').map(o => o.trim())
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')
