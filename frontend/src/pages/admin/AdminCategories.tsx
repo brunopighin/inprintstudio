@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronUp } from 'lucide-react'
+import axios from 'axios'
 import api from '../../services/api'
 import { Category } from '../../types'
 
@@ -40,7 +41,7 @@ export default function AdminCategories() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta categoría? Se eliminará junto a todas sus subcategorías.')) return
+    if (!confirm('¿Desactivar esta categoría? Dejará de verse en la tienda. Podés reactivarla después editándola.')) return
     await api.delete(`/admin/categories/${id}`)
     fetch()
   }
@@ -54,8 +55,13 @@ export default function AdminCategories() {
 
   const handleDeleteSub = async (id: string) => {
     if (!confirm('¿Eliminar esta subcategoría?')) return
-    await api.delete(`/admin/categories/subcategories/${id}`)
-    fetch()
+    try {
+      await api.delete(`/admin/categories/subcategories/${id}`)
+      fetch()
+    } catch (err) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error : null
+      alert(message || 'Error al eliminar subcategoría')
+    }
   }
 
   return (

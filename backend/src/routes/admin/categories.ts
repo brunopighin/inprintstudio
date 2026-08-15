@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { requireAdmin, AuthRequest } from '../../middleware/auth'
 
 const router = Router()
@@ -45,10 +45,10 @@ router.put('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
 
 router.delete('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    await prisma.category.delete({ where: { id: req.params.id } })
-    res.json({ message: 'Categoría eliminada' })
+    await prisma.category.update({ where: { id: req.params.id }, data: { active: false } })
+    res.json({ message: 'Categoría desactivada' })
   } catch {
-    res.status(500).json({ error: 'Error al eliminar categoría' })
+    res.status(500).json({ error: 'Error al desactivar categoría' })
   }
 })
 
@@ -70,7 +70,11 @@ router.delete('/subcategories/:id', requireAdmin, async (req: AuthRequest, res: 
   try {
     await prisma.subcategory.delete({ where: { id: req.params.id } })
     res.json({ message: 'Subcategoría eliminada' })
-  } catch {
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+      res.status(409).json({ error: 'No se puede eliminar: tiene productos asociados. Desactivalos o reasignalos primero.' })
+      return
+    }
     res.status(500).json({ error: 'Error al eliminar subcategoría' })
   }
 })
