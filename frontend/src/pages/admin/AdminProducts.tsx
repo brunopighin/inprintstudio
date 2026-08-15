@@ -20,7 +20,9 @@ export default function AdminProducts() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [activating, setActivating] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [saving, setSaving] = useState(false)
@@ -37,16 +39,33 @@ export default function AdminProducts() {
     setLoading(true)
     const params = new URLSearchParams({ page: String(page), limit: '20' })
     if (search) params.set('search', search)
+    if (categoryFilter) params.set('category', categoryFilter)
     const { data } = await api.get(`/admin/products?${params}`)
     setProducts(data.products)
     setTotal(data.total)
     setLoading(false)
   }
 
-  useEffect(() => { fetch() }, [page])
+  useEffect(() => { fetch() }, [page, categoryFilter])
   useEffect(() => {
     api.get('/admin/categories').then(r => setCategories(r.data))
   }, [])
+
+  const handleBulkActivate = async () => {
+    const scope = [search && `que coincidan con "${search}"`, categoryFilter && `de la categoría filtrada`].filter(Boolean).join(' y ')
+    if (!confirm(`¿Activar todos los productos inactivos${scope ? ' ' + scope : ''}? Van a aparecer en la tienda con el precio que tengan cargado.`)) return
+    setActivating(true)
+    try {
+      const params = new URLSearchParams()
+      if (search) params.set('search', search)
+      if (categoryFilter) params.set('category', categoryFilter)
+      const { data } = await api.patch(`/admin/products/bulk-activate?${params}`)
+      alert(`${data.count} producto(s) activado(s).`)
+      fetch()
+    } finally {
+      setActivating(false)
+    }
+  }
 
   const openCreate = () => {
     setEditProduct(null)
@@ -140,12 +159,28 @@ export default function AdminProducts() {
         </button>
       </div>
 
-      <form onSubmit={e => { e.preventDefault(); setPage(1); fetch() }} className="flex gap-3">
+      <form onSubmit={e => { e.preventDefault(); setPage(1); fetch() }} className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input className="input-base pl-9 py-2 text-sm" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..." />
         </div>
+        <select
+          className="input-base py-2 text-sm max-w-xs"
+          value={categoryFilter}
+          onChange={e => { setCategoryFilter(e.target.value); setPage(1) }}
+        >
+          <option value="">Todas las categorías</option>
+          {categories.map(c => <option key={c.id} value={c.slug}>{c.name}</option>)}
+        </select>
         <button type="submit" className="btn-primary py-2 text-sm">Buscar</button>
+        <button
+          type="button"
+          onClick={handleBulkActivate}
+          disabled={activating}
+          className="ml-auto py-2 px-4 text-sm font-semibold border-2 border-black hover:bg-black hover:text-white transition-colors disabled:opacity-50"
+        >
+          {activating ? 'Activando...' : 'Activar todos los filtrados'}
+        </button>
       </form>
 
       <div className="bg-white border border-gray-200 overflow-hidden">

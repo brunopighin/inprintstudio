@@ -30,6 +30,20 @@ router.get('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   }
 })
 
+router.patch('/bulk-activate', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { search, category } = req.query
+    const where: Record<string, unknown> = { active: false }
+    if (search) where.name = { contains: search as string }
+    if (category) where.category = { slug: category }
+
+    const { count } = await prisma.product.updateMany({ where, data: { active: true } })
+    res.json({ count })
+  } catch {
+    res.status(500).json({ error: 'Error al activar productos' })
+  }
+})
+
 router.post('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { name, description, categoryId, subcategoryId, images, basePrice, featured, active, variants } = req.body
