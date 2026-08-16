@@ -99,37 +99,33 @@ export default function Catalog() {
                       >
                         {cat.name}
                       </Link>
+
+                      {categorySlug === cat.slug && cat.subcategories && cat.subcategories.length > 0 && (
+                        <ul className="mt-1 mb-1 ml-3 pl-3 border-l-2 border-gray-200 space-y-1">
+                          <li>
+                            <button
+                              onClick={() => updateFilter('subcategory', '')}
+                              className={`block w-full text-left py-1 px-2 text-sm transition-colors ${!subcategory ? 'font-semibold text-black' : 'text-gray-500 hover:text-black'}`}
+                            >
+                              Todos
+                            </button>
+                          </li>
+                          {cat.subcategories.map(sub => (
+                            <li key={sub.id}>
+                              <button
+                                onClick={() => updateFilter('subcategory', sub.slug)}
+                                className={`block w-full text-left py-1 px-2 text-sm transition-colors ${subcategory === sub.slug ? 'font-semibold text-black bg-gray-100' : 'text-gray-500 hover:text-black'}`}
+                              >
+                                {sub.name}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   ))}
                 </ul>
               </div>
-
-              {/* Subcategories */}
-              {activeCategory?.subcategories && activeCategory.subcategories.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Tipo</h3>
-                  <ul className="space-y-1">
-                    <li>
-                      <button
-                        onClick={() => updateFilter('subcategory', '')}
-                        className={`block w-full text-left py-1.5 px-2 text-sm transition-colors ${!subcategory ? 'font-semibold text-black' : 'text-gray-500 hover:text-black'}`}
-                      >
-                        Todos
-                      </button>
-                    </li>
-                    {activeCategory.subcategories.map(sub => (
-                      <li key={sub.id}>
-                        <button
-                          onClick={() => updateFilter('subcategory', sub.slug)}
-                          className={`block w-full text-left py-1.5 px-2 text-sm transition-colors ${subcategory === sub.slug ? 'font-semibold text-black bg-gray-100' : 'text-gray-500 hover:text-black'}`}
-                        >
-                          {sub.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           </aside>
 
