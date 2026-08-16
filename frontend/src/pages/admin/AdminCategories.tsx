@@ -12,6 +12,7 @@ export default function AdminCategories() {
   const [subModal, setSubModal] = useState<{ open: boolean; catId?: string; name: string }>({ open: false, name: '' })
   const [form, setForm] = useState({ name: '', description: '', image: '', displayOrder: '0', active: true })
   const [saving, setSaving] = useState(false)
+  const [showInactive, setShowInactive] = useState(false)
 
   const fetch = () => {
     setLoading(true)
@@ -64,21 +65,29 @@ export default function AdminCategories() {
     }
   }
 
+  const visibleCategories = showInactive ? categories : categories.filter(c => c.active)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black">Categorías</h1>
-          <p className="text-gray-500 text-sm mt-1">{categories.length} categorías</p>
+          <p className="text-gray-500 text-sm mt-1">{visibleCategories.length} categorías</p>
         </div>
-        <button onClick={openCreate} className="btn-primary gap-2">
-          <Plus size={16} /> Nueva categoría
-        </button>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
+            <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
+            Mostrar inactivas ({categories.length - categories.filter(c => c.active).length})
+          </label>
+          <button onClick={openCreate} className="btn-primary gap-2">
+            <Plus size={16} /> Nueva categoría
+          </button>
+        </div>
       </div>
 
       {loading ? <div className="p-8 text-center text-gray-400">Cargando...</div> : (
         <div className="space-y-2">
-          {categories.map(cat => (
+          {visibleCategories.map(cat => (
             <div key={cat.id} className="bg-white border border-gray-200">
               <div className="flex items-center gap-4 p-4">
                 {cat.image && (
