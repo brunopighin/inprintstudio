@@ -102,14 +102,6 @@ export default function Catalog() {
 
                       {categorySlug === cat.slug && cat.subcategories && cat.subcategories.length > 0 && (
                         <ul className="mt-1 mb-1 ml-3 pl-3 border-l-2 border-gray-200 space-y-1">
-                          <li>
-                            <button
-                              onClick={() => updateFilter('subcategory', '')}
-                              className={`block w-full text-left py-1 px-2 text-sm transition-colors ${!subcategory ? 'font-semibold text-black' : 'text-gray-500 hover:text-black'}`}
-                            >
-                              Todos
-                            </button>
-                          </li>
                           {cat.subcategories.map(sub => (
                             <li key={sub.id}>
                               <button
