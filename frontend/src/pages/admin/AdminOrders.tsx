@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Search, ChevronDown, ChevronUp, X, Truck } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, X, Truck, Download } from 'lucide-react'
 import api from '../../services/api'
 import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS } from '../../types'
+
+function photoFileName(photoUrl: string, orderNumber: string, productName?: string) {
+  const ext = /^data:image\/(\w+);/.exec(photoUrl)?.[1]?.replace('jpeg', 'jpg') || 'jpg'
+  const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const slug = stripAccents(productName || 'foto')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  return `${orderNumber}-${slug}.${ext}`
+}
 
 const SHIPPING_METHOD_LABELS: Record<string, string> = {
   shipping: 'Envío a domicilio',
@@ -185,9 +193,24 @@ export default function AdminOrders() {
                               <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Productos</p>
                               <div className="space-y-2">
                                 {order.items?.map(item => (
-                                  <div key={item.id} className="flex justify-between text-sm">
-                                    <span className="text-gray-700">{item.product?.name} {item.variant && `(${item.variant.label})`} ×{item.quantity}</span>
-                                    <span className="font-medium">${(item.price * item.quantity).toLocaleString('es-AR')}</span>
+                                  <div key={item.id} className="flex items-start justify-between gap-3 text-sm">
+                                    <div className="flex items-start gap-2">
+                                      {item.photoUrl && (
+                                        <a
+                                          href={item.photoUrl}
+                                          download={photoFileName(item.photoUrl, order.orderNumber, item.product?.name)}
+                                          title="Descargar foto que subió el cliente"
+                                          className="relative group shrink-0"
+                                        >
+                                          <img src={item.photoUrl} alt="Foto del cliente" className="w-10 h-10 object-cover border border-gray-300" />
+                                          <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                                            <Download size={14} className="text-white opacity-0 group-hover:opacity-100" />
+                                          </span>
+                                        </a>
+                                      )}
+                                      <span className="text-gray-700">{item.product?.name} {item.variant && `(${item.variant.label})`} ×{item.quantity}</span>
+                                    </div>
+                                    <span className="font-medium whitespace-nowrap">${(item.price * item.quantity).toLocaleString('es-AR')}</span>
                                   </div>
                                 ))}
                               </div>
