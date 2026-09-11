@@ -53,16 +53,28 @@ export interface Product {
 
 export type OrderStatus = 'RECEIVED' | 'IN_PRODUCTION' | 'READY' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED'
 
-export type Carrier = 'correo_argentino' | 'andreani'
+export type ShippingMethod = 'pickup' | 'shipping'
+
+export type Carrier = 'correo_argentino' | 'andreani' | 'oca'
 
 export const CARRIER_LABELS: Record<Carrier, string> = {
   correo_argentino: 'Correo Argentino',
   andreani: 'Andreani',
+  oca: 'OCA',
 }
 
 export const CARRIER_TRACKING_URLS: Record<Carrier, string> = {
   correo_argentino: 'https://www.correoargentino.com.ar/formularios/e-commerce',
   andreani: 'https://www.andreani.com/?tab=seguir-envio',
+  oca: 'https://www.oca.com.ar/Busquedas/Seguimientos',
+}
+
+export interface ShippingQuote {
+  carrier: Carrier
+  label: string
+  price: number
+  etaDaysMin?: number
+  etaDaysMax?: number
 }
 
 export interface OrderItem {
@@ -87,13 +99,18 @@ export interface Order {
   items: OrderItem[]
   status: OrderStatus
   subtotal: number
+  discount: number
   shippingCost: number
   total: number
-  shippingMethod: string
+  shippingMethod: ShippingMethod
+  shippingCarrier?: Carrier
   paymentMethod: string
   paymentStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'IN_PROCESS'
   shippingAddress?: string
+  locality?: string
+  province?: string
   postalCode?: string
+  deliveryReference?: string
   trackingCarrier?: Carrier
   trackingNumber?: string
   notes?: string

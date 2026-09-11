@@ -74,6 +74,7 @@ model ProductVariant {
   price      Float
   stock      Int         @default(999)
   sku        String?
+  weightGrams Int?       @default(500)
   orderItems OrderItem[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
@@ -90,15 +91,20 @@ model Order {
   items           OrderItem[]
   status          String      @default("RECEIVED")
   subtotal        Float
+  discount        Float       @default(0)
   shippingCost    Float       @default(0)
   total           Float
   shippingMethod  String
+  shippingCarrier String?
   paymentMethod   String
   paymentStatus   String      @default("PENDING")
   mpPreferenceId  String?
   mpPaymentId     String?
   shippingAddress String?
+  locality        String?
+  province        String?
   postalCode      String?
+  deliveryReference String?
   trackingCarrier String?
   trackingNumber  String?
   notes           String?

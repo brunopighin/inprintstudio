@@ -3,6 +3,11 @@ import { Search, ChevronDown, ChevronUp, X, Truck } from 'lucide-react'
 import api from '../../services/api'
 import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS } from '../../types'
 
+const SHIPPING_METHOD_LABELS: Record<string, string> = {
+  shipping: 'Envío a domicilio',
+  pickup: 'Retiro en local',
+}
+
 const STATUSES: { key: string; label: string }[] = [
   { key: 'ALL', label: 'Todos' },
   { key: 'RECEIVED', label: 'Recibidos' },
@@ -191,7 +196,10 @@ export default function AdminOrders() {
                               <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Detalles</p>
                               <div className="text-sm space-y-1 text-gray-600">
                                 <p>Teléfono: {order.customerPhone || '—'}</p>
-                                <p>Envío: {order.shippingMethod === 'pickup' ? 'Retiro en local' : 'Envío a domicilio'}</p>
+                                <p>Modalidad de entrega: {SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod}</p>
+                                {order.shippingMethod === 'shipping' && (
+                                  <p>Envío: {order.shippingCarrier ? CARRIER_LABELS[order.shippingCarrier] : '—'} · ${order.shippingCost.toLocaleString('es-AR')}</p>
+                                )}
                                 <p>
                                   Pago: {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : 'Transferencia'}
                                   {' · '}
@@ -204,7 +212,10 @@ export default function AdminOrders() {
                                   </span>
                                 </p>
                                 {order.shippingAddress && <p>Dirección: {order.shippingAddress}</p>}
+                                {order.locality && <p>Localidad: {order.locality}</p>}
+                                {order.province && <p>Provincia: {order.province}</p>}
                                 {order.postalCode && <p>Código postal: {order.postalCode}</p>}
+                                {order.deliveryReference && <p>Referencia de entrega: {order.deliveryReference}</p>}
                                 {order.notes && <p>Notas: {order.notes}</p>}
                               </div>
 
