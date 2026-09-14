@@ -16,10 +16,11 @@ const SHIPMENT_STATUS_LABELS: Record<string, string> = {
   error: 'Error al generar el envío',
 }
 
-// OCA está deshabilitado como carrier activo (ver shippingProviders/index.ts),
-// así que no se ofrece para cargar seguimiento nuevo — pero un pedido viejo
-// que ya lo tenga guardado lo sigue mostrando (ver trackingOptionsFor).
-const SELECTABLE_CARRIERS: Carrier[] = ['correo_argentino', 'andreani']
+// OCA y Andreani están deshabilitados como carriers activos (ver
+// shippingProviders/index.ts), así que no se ofrecen para cargar seguimiento
+// nuevo — pero un pedido viejo que ya los tenga guardados los sigue mostrando
+// (ver trackingOptionsFor).
+const SELECTABLE_CARRIERS: Carrier[] = ['correo_argentino']
 const trackingOptionsFor = (order: Order): Carrier[] =>
   order.trackingCarrier && !SELECTABLE_CARRIERS.includes(order.trackingCarrier)
     ? [...SELECTABLE_CARRIERS, order.trackingCarrier]

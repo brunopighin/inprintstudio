@@ -1,12 +1,13 @@
 import { QuoteInput, ShippingQuote } from './types'
 import { correoArgentinoProvider } from './correoArgentino'
-import { andreaniProvider } from './andreani'
 
-// OCA queda deshabilitado por ahora (se arranca con un solo correo para
-// validar el circuito completo con datos reales antes de sumar el segundo).
-// La integración de oca.ts sigue verificada y lista — para reactivarla alcanza
-// con importar ocaProvider de nuevo y agregarlo a PROVIDERS.
-const PROVIDERS = [correoArgentinoProvider, andreaniProvider]
+// Se arranca con un solo correo activo (Correo Argentino) para validar el
+// circuito completo con datos reales antes de sumar más:
+// - OCA: integración de oca.ts verificada y lista — reactivar importando
+//   ocaProvider y agregándolo acá.
+// - Andreani: nunca llegó a implementarse (ver andreani.ts) — su cotizador
+//   real requiere un contrato comercial que todavía no se gestionó.
+const PROVIDERS = [correoArgentinoProvider]
 
 export async function getShippingQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
   const flags = await Promise.all(PROVIDERS.map(p => p.isConfigured()))
