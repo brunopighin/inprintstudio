@@ -16,6 +16,15 @@ const SHIPMENT_STATUS_LABELS: Record<string, string> = {
   error: 'Error al generar el envío',
 }
 
+// OCA está deshabilitado como carrier activo (ver shippingProviders/index.ts),
+// así que no se ofrece para cargar seguimiento nuevo — pero un pedido viejo
+// que ya lo tenga guardado lo sigue mostrando (ver trackingOptionsFor).
+const SELECTABLE_CARRIERS: Carrier[] = ['correo_argentino', 'andreani']
+const trackingOptionsFor = (order: Order): Carrier[] =>
+  order.trackingCarrier && !SELECTABLE_CARRIERS.includes(order.trackingCarrier)
+    ? [...SELECTABLE_CARRIERS, order.trackingCarrier]
+    : SELECTABLE_CARRIERS
+
 function photoFileName(photoUrl: string, orderNumber: string, productName?: string) {
   const ext = /^data:image\/(\w+);/.exec(photoUrl)?.[1]?.replace('jpeg', 'jpg') || 'jpg'
   const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -362,8 +371,8 @@ export default function AdminOrders() {
                                       value={draftFor(order).carrier}
                                       onChange={e => updateDraft(order.id, { carrier: e.target.value as Carrier })}
                                     >
-                                      {Object.entries(CARRIER_LABELS).map(([key, label]) => (
-                                        <option key={key} value={key}>{label}</option>
+                                      {trackingOptionsFor(order).map(key => (
+                                        <option key={key} value={key}>{CARRIER_LABELS[key]}</option>
                                       ))}
                                     </select>
                                     <input
