@@ -132,20 +132,6 @@ export default function AdminShippingSettings() {
       </div>
 
       <div className="bg-white border border-gray-200 p-6 space-y-4">
-        <h2 className="font-bold">OCA</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="label">CUIT</label>
-            <input className="input-base" value={form.OCA_CUIT} onChange={e => update('OCA_CUIT', e.target.value)} placeholder="30-12345678-9" />
-          </div>
-          <div>
-            <label className="label">Operativa</label>
-            <input className="input-base" value={form.OCA_OPERATIVA} onChange={e => update('OCA_OPERATIVA', e.target.value)} placeholder="410150" />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white border border-gray-200 p-6 space-y-4">
         <h2 className="font-bold">General</h2>
         <div>
           <label className="label">Código postal de origen</label>
