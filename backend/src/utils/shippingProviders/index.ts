@@ -1,9 +1,12 @@
 import { QuoteInput, ShippingQuote } from './types'
 import { correoArgentinoProvider } from './correoArgentino'
 import { andreaniProvider } from './andreani'
-import { ocaProvider } from './oca'
 
-const PROVIDERS = [correoArgentinoProvider, andreaniProvider, ocaProvider]
+// OCA queda deshabilitado por ahora (se arranca con un solo correo para
+// validar el circuito completo con datos reales antes de sumar el segundo).
+// La integración de oca.ts sigue verificada y lista — para reactivarla alcanza
+// con importar ocaProvider de nuevo y agregarlo a PROVIDERS.
+const PROVIDERS = [correoArgentinoProvider, andreaniProvider]
 
 export async function getShippingQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
   const flags = await Promise.all(PROVIDERS.map(p => p.isConfigured()))
