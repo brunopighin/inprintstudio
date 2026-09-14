@@ -107,6 +107,9 @@ model Order {
   deliveryReference String?
   trackingCarrier String?
   trackingNumber  String?
+  shippingBranchCode String?
+  shipmentStatus  String?
+  shipmentError   String?
   notes           String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt

@@ -1,7 +1,20 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Search, ChevronDown, ChevronUp, X, Truck, Download } from 'lucide-react'
 import api from '../../services/api'
-import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS } from '../../types'
+import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS, PROVINCE_NAMES } from '../../types'
+
+interface Agency {
+  code: string
+  name: string
+  address: string
+  city: string
+  postalCode: string
+}
+
+const SHIPMENT_STATUS_LABELS: Record<string, string> = {
+  imported: 'Envío generado',
+  error: 'Error al generar el envío',
+}
 
 function photoFileName(photoUrl: string, orderNumber: string, productName?: string) {
   const ext = /^data:image\/(\w+);/.exec(photoUrl)?.[1]?.replace('jpeg', 'jpg') || 'jpg'
@@ -43,6 +56,10 @@ export default function AdminOrders() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [trackingDrafts, setTrackingDrafts] = useState<Record<string, { carrier: Carrier; number: string }>>({})
   const [savingTracking, setSavingTracking] = useState<string | null>(null)
+  const [agenciesByProvince, setAgenciesByProvince] = useState<Record<string, Agency[]>>({})
+  const [loadingAgenciesFor, setLoadingAgenciesFor] = useState<string | null>(null)
+  const [savingBranch, setSavingBranch] = useState<string | null>(null)
+  const [generatingShipment, setGeneratingShipment] = useState<string | null>(null)
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -88,6 +105,46 @@ export default function AdminOrders() {
       fetchOrders()
     } finally {
       setSavingTracking(null)
+    }
+  }
+
+  const loadAgencies = async (order: Order) => {
+    if (!order.province || agenciesByProvince[order.province]) return
+    setLoadingAgenciesFor(order.id)
+    try {
+      const { data } = await api.get(`/admin/orders/agencies?province=${encodeURIComponent(order.province)}`)
+      setAgenciesByProvince(a => ({ ...a, [order.province!]: data }))
+    } catch {
+      setAgenciesByProvince(a => ({ ...a, [order.province!]: [] }))
+    } finally {
+      setLoadingAgenciesFor(null)
+    }
+  }
+
+  const saveBranch = async (order: Order, branchCode: string) => {
+    setSavingBranch(order.id)
+    try {
+      await api.patch(`/admin/orders/${order.id}/branch`, { branchCode: branchCode || null })
+      fetchOrders()
+    } finally {
+      setSavingBranch(null)
+    }
+  }
+
+  const generateShipment = async (order: Order) => {
+    setGeneratingShipment(order.id)
+    try {
+      await api.post(`/admin/orders/${order.id}/generate-shipment`)
+    } catch (err) {
+      // Errores ya guardados en el pedido (shipmentError) se ven al refrescar;
+      // los que ocurren antes de eso (ej. no configurado) se avisan acá.
+      const isAxiosError = (e: unknown): e is { response?: { data?: { error?: string } } } =>
+        typeof e === 'object' && e !== null && 'response' in e
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined
+      if (message) alert(message)
+    } finally {
+      setGeneratingShipment(null)
+      fetchOrders()
     }
   }
 
@@ -146,10 +203,17 @@ export default function AdminOrders() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {orders.map(order => (
-                  <>
-                    <tr key={order.id} className="hover:bg-gray-50">
+                  <Fragment key={order.id}>
+                    <tr className="hover:bg-gray-50">
                       <td className="px-4 py-3">
-                        <button onClick={() => setExpandedId(expandedId === order.id ? null : order.id)} className="text-gray-400 hover:text-black">
+                        <button
+                          onClick={() => {
+                            const opening = expandedId !== order.id
+                            setExpandedId(opening ? order.id : null)
+                            if (opening && order.shippingCarrier === 'correo_argentino') loadAgencies(order)
+                          }}
+                          className="text-gray-400 hover:text-black"
+                        >
                           {expandedId === order.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
                       </td>
@@ -236,11 +300,47 @@ export default function AdminOrders() {
                                 </p>
                                 {order.shippingAddress && <p>Dirección: {order.shippingAddress}</p>}
                                 {order.locality && <p>Localidad: {order.locality}</p>}
-                                {order.province && <p>Provincia: {order.province}</p>}
+                                {order.province && <p>Provincia: {PROVINCE_NAMES[order.province] || order.province}</p>}
                                 {order.postalCode && <p>Código postal: {order.postalCode}</p>}
                                 {order.deliveryReference && <p>Referencia de entrega: {order.deliveryReference}</p>}
                                 {order.notes && <p>Notas: {order.notes}</p>}
                               </div>
+
+                              {order.shippingMethod === 'shipping' && order.shippingCarrier === 'correo_argentino' && (
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Envío con Correo Argentino</p>
+
+                                  <div className="flex flex-wrap gap-2 items-center mb-2">
+                                    <select
+                                      className="input-base py-1.5 text-sm w-auto"
+                                      value={order.shippingBranchCode || ''}
+                                      disabled={savingBranch === order.id || loadingAgenciesFor === order.id}
+                                      onChange={e => saveBranch(order, e.target.value)}
+                                    >
+                                      <option value="">Entrega a domicilio (sin sucursal)</option>
+                                      {(order.province ? agenciesByProvince[order.province] : [])?.map(a => (
+                                        <option key={a.code} value={a.code}>{a.name}{a.address ? ` — ${a.address}` : ''}</option>
+                                      ))}
+                                    </select>
+                                    {loadingAgenciesFor === order.id && <span className="text-xs text-gray-400">Cargando sucursales...</span>}
+                                  </div>
+
+                                  {order.shipmentStatus && (
+                                    <p className={`text-sm mb-2 ${order.shipmentStatus === 'error' ? 'text-red-600' : 'text-green-700'}`}>
+                                      {SHIPMENT_STATUS_LABELS[order.shipmentStatus] || order.shipmentStatus}
+                                      {order.shipmentStatus === 'error' && order.shipmentError && `: ${order.shipmentError}`}
+                                    </p>
+                                  )}
+
+                                  <button
+                                    onClick={() => generateShipment(order)}
+                                    disabled={generatingShipment === order.id || order.shipmentStatus === 'imported'}
+                                    className="text-xs bg-black text-white px-3 py-1.5 hover:bg-gray-800 transition-colors disabled:opacity-50"
+                                  >
+                                    {generatingShipment === order.id ? 'Generando...' : order.shipmentStatus === 'imported' ? 'Envío ya generado' : order.shipmentStatus === 'error' ? 'Reintentar' : 'Generar envío'}
+                                  </button>
+                                </div>
+                              )}
 
                               {order.shippingMethod !== 'pickup' && (
                                 <div className="mt-4 pt-4 border-t border-gray-200">
@@ -287,7 +387,7 @@ export default function AdminOrders() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

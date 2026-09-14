@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Check, Truck, Store, CreditCard, ArrowLeft } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
-import { Carrier, CARRIER_LABELS, ShippingQuote } from '../types'
+import { Carrier, CARRIER_LABELS, ShippingQuote, PROVINCES } from '../types'
 import api from '../services/api'
 
 type Step = 'contact' | 'shipping' | 'payment' | 'confirm'
@@ -295,7 +295,10 @@ export default function Checkout() {
                           </div>
                           <div>
                             <label className="label">Provincia *</label>
-                            <input className="input-base" value={form.province} onChange={e => update('province', e.target.value)} placeholder="Ej: Buenos Aires" />
+                            <select className="input-base" value={form.province} onChange={e => update('province', e.target.value)}>
+                              <option value="">Seleccioná una provincia</option>
+                              {PROVINCES.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
+                            </select>
                             {shippingAttempted && shippingErrors.province && <p className="text-red-600 text-xs mt-1">{shippingErrors.province}</p>}
                           </div>
                         </div>

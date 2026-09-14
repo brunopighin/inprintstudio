@@ -69,6 +69,37 @@ export const CARRIER_TRACKING_URLS: Record<Carrier, string> = {
   oca: 'https://www.oca.com.ar/Busquedas/Seguimientos',
 }
 
+// Códigos de provincia de Correo Argentino (ISO 3166-2:AR), usados como
+// value del selector de provincia en el checkout y para pedir sucursales.
+export const PROVINCES: { code: string; name: string }[] = [
+  { code: 'A', name: 'Salta' },
+  { code: 'B', name: 'Buenos Aires' },
+  { code: 'C', name: 'Ciudad Autónoma de Buenos Aires' },
+  { code: 'D', name: 'San Luis' },
+  { code: 'E', name: 'Entre Ríos' },
+  { code: 'F', name: 'La Rioja' },
+  { code: 'G', name: 'Santiago del Estero' },
+  { code: 'H', name: 'Chaco' },
+  { code: 'J', name: 'San Juan' },
+  { code: 'K', name: 'Catamarca' },
+  { code: 'L', name: 'La Pampa' },
+  { code: 'M', name: 'Mendoza' },
+  { code: 'N', name: 'Misiones' },
+  { code: 'P', name: 'Formosa' },
+  { code: 'Q', name: 'Neuquén' },
+  { code: 'R', name: 'Río Negro' },
+  { code: 'S', name: 'Santa Fe' },
+  { code: 'T', name: 'Tucumán' },
+  { code: 'U', name: 'Chubut' },
+  { code: 'V', name: 'Tierra del Fuego' },
+  { code: 'W', name: 'Corrientes' },
+  { code: 'X', name: 'Córdoba' },
+  { code: 'Y', name: 'Jujuy' },
+  { code: 'Z', name: 'Santa Cruz' },
+]
+
+export const PROVINCE_NAMES: Record<string, string> = Object.fromEntries(PROVINCES.map(p => [p.code, p.name]))
+
 export interface ShippingQuote {
   carrier: Carrier
   label: string
@@ -113,6 +144,9 @@ export interface Order {
   deliveryReference?: string
   trackingCarrier?: Carrier
   trackingNumber?: string
+  shippingBranchCode?: string
+  shipmentStatus?: string
+  shipmentError?: string
   notes?: string
   createdAt: string
   updatedAt: string
