@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
 import { ShippingProvider, QuoteInput, ShippingQuote } from './types'
+import { getSetting, getSettings } from '../settings'
 
 // Integración real contra el webservice legacy "ePak" de OCA (Oep_TrackEPak.asmx,
 // endpoint Tarifar_Envio_Corporativo). Verificado a mano contra el WSDL público
@@ -24,12 +25,9 @@ function toOldPostalCode(postalCode: string): string | null {
   return match ? match[0] : null
 }
 
-function isConfigured() {
-  return Boolean(
-    process.env.OCA_BASE_URL &&
-    process.env.OCA_CUIT &&
-    process.env.OCA_OPERATIVA
-  )
+async function isConfigured() {
+  const creds = await getSettings(['OCA_CUIT', 'OCA_OPERATIVA'])
+  return Boolean(process.env.OCA_BASE_URL && creds.OCA_CUIT && creds.OCA_OPERATIVA)
 }
 
 interface TarifaRow {
@@ -42,7 +40,12 @@ interface TarifaRow {
 
 async function getQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
   const baseUrl = process.env.OCA_BASE_URL!.replace(/\/$/, '')
-  const origin = toOldPostalCode(process.env.ORIGIN_POSTAL_CODE || '')
+  const [originPostalCode, cuit, operativa] = await Promise.all([
+    getSetting('ORIGIN_POSTAL_CODE'),
+    getSetting('OCA_CUIT'),
+    getSetting('OCA_OPERATIVA'),
+  ])
+  const origin = toOldPostalCode(originPostalCode || '')
   const destination = toOldPostalCode(input.postalCodeDestination)
   if (!origin || !destination) {
     throw new Error('Código postal inválido para cotizar con OCA')
@@ -58,8 +61,8 @@ async function getQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
     CodigoPostalDestino: destination,
     CantidadPaquetes: '1',
     ValorDeclarado: input.declaredValue ? String(Math.round(input.declaredValue)) : '',
-    Cuit: process.env.OCA_CUIT!,
-    Operativa: process.env.OCA_OPERATIVA!,
+    Cuit: cuit!,
+    Operativa: operativa!,
   })
 
   const res = await fetch(`${baseUrl}/Tarifar_Envio_Corporativo`, {

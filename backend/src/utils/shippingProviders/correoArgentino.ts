@@ -1,4 +1,5 @@
 import { ShippingProvider, QuoteInput, ShippingQuote } from './types'
+import { getSetting, getSettings } from '../settings'
 
 // Integración real contra la API "MiCorreo" de Correo Argentino, verificada
 // contra el código fuente del plugin oficial de WooCommerce de Correo
@@ -24,12 +25,16 @@ const DEFAULT_INTEGRATOR_PASS = 'Paneles55+'
 let cachedToken: { token: string; expiresAt: number } | null = null
 let cachedCustomerId: string | null = null
 
-export function isConfigured() {
-  return Boolean(
-    process.env.MICORREO_BASE_URL &&
-    process.env.MICORREO_USER &&
-    process.env.MICORREO_PASSWORD
-  )
+export async function isConfigured() {
+  const creds = await getSettings(['MICORREO_USER', 'MICORREO_PASSWORD'])
+  return Boolean(process.env.MICORREO_BASE_URL && creds.MICORREO_USER && creds.MICORREO_PASSWORD)
+}
+
+// Se llama después de guardar credenciales nuevas en el admin, para no seguir
+// usando un token/customerId obtenidos con las credenciales viejas.
+export function resetCache() {
+  cachedToken = null
+  cachedCustomerId = null
 }
 
 async function getToken(): Promise<string> {
@@ -63,8 +68,8 @@ async function getCustomerId(): Promise<string> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      email: process.env.MICORREO_USER,
-      password: process.env.MICORREO_PASSWORD,
+      email: await getSetting('MICORREO_USER'),
+      password: await getSetting('MICORREO_PASSWORD'),
     }),
   })
   if (!res.ok) throw new Error(`MiCorreo users/validate error: ${res.status}`)
@@ -86,7 +91,7 @@ async function getQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
     },
     body: JSON.stringify({
       customerId,
-      postalCodeOrigin: process.env.ORIGIN_POSTAL_CODE,
+      postalCodeOrigin: await getSetting('ORIGIN_POSTAL_CODE'),
       postalCodeDestination: input.postalCodeDestination,
       dimensions: {
         weight: input.weightGrams,
@@ -252,27 +257,31 @@ export async function importShipment(params: ImportShipmentParams): Promise<void
   const baseUrl = process.env.MICORREO_BASE_URL!.replace(/\/$/, '')
   const [token, customerId] = await Promise.all([getToken(), getCustomerId()])
 
+  const sender = await getSettings([
+    'SENDER_NAME', 'SENDER_PHONE', 'SENDER_EMAIL', 'SENDER_STREET', 'SENDER_NUMBER',
+    'SENDER_FLOOR', 'SENDER_APARTMENT', 'SENDER_CITY', 'SENDER_PROVINCE', 'SENDER_POSTAL_CODE',
+  ])
   const requiredSender = ['SENDER_NAME', 'SENDER_STREET', 'SENDER_NUMBER', 'SENDER_CITY', 'SENDER_PROVINCE', 'SENDER_POSTAL_CODE']
-  const missing = requiredSender.filter(k => !process.env[k])
-  if (missing.length) throw new Error(`Faltan datos del remitente en el servidor: ${missing.join(', ')}`)
+  const missing = requiredSender.filter(k => !sender[k])
+  if (missing.length) throw new Error(`Faltan datos del remitente. Cargalos en el admin, en Configuración → Envíos.`)
 
   const body = {
     customerId,
     extOrderId: params.extOrderId,
     orderNumber: params.orderNumber,
     sender: {
-      name: process.env.SENDER_NAME,
-      phone: process.env.SENDER_PHONE || '',
-      cellPhone: process.env.SENDER_PHONE || '',
-      email: process.env.SENDER_EMAIL || '',
+      name: sender.SENDER_NAME,
+      phone: sender.SENDER_PHONE || '',
+      cellPhone: sender.SENDER_PHONE || '',
+      email: sender.SENDER_EMAIL || '',
       originAddress: {
-        streetName: process.env.SENDER_STREET,
-        streetNumber: process.env.SENDER_NUMBER,
-        floor: process.env.SENDER_FLOOR || '',
-        apartment: process.env.SENDER_APARTMENT || '',
-        city: process.env.SENDER_CITY,
-        provinceCode: toProvinceCode(process.env.SENDER_PROVINCE!),
-        postalCode: (process.env.SENDER_POSTAL_CODE || '').replace(/\D/g, ''),
+        streetName: sender.SENDER_STREET,
+        streetNumber: sender.SENDER_NUMBER,
+        floor: sender.SENDER_FLOOR || '',
+        apartment: sender.SENDER_APARTMENT || '',
+        city: sender.SENDER_CITY,
+        provinceCode: toProvinceCode(sender.SENDER_PROVINCE!),
+        postalCode: (sender.SENDER_POSTAL_CODE || '').replace(/\D/g, ''),
       },
     },
     recipient: {

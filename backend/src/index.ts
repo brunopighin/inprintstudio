@@ -16,6 +16,7 @@ import { adminUserRoutes } from './routes/admin/users'
 import { adminPromotionRoutes } from './routes/admin/promotions'
 import { adminBannerRoutes } from './routes/admin/banners'
 import { adminUploadRoutes } from './routes/admin/upload'
+import { adminSettingsRoutes } from './routes/admin/settings'
 
 dotenv.config()
 
@@ -47,6 +48,7 @@ app.use('/api/admin/users', adminUserRoutes)
 app.use('/api/admin/promotions', adminPromotionRoutes)
 app.use('/api/admin/banners', adminBannerRoutes)
 app.use('/api/admin/upload', adminUploadRoutes)
+app.use('/api/admin/settings', adminSettingsRoutes)
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date(), uptime: process.uptime() }))
 

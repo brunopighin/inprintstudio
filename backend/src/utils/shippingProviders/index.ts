@@ -6,7 +6,8 @@ import { ocaProvider } from './oca'
 const PROVIDERS = [correoArgentinoProvider, andreaniProvider, ocaProvider]
 
 export async function getShippingQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
-  const configured = PROVIDERS.filter(p => p.isConfigured())
+  const flags = await Promise.all(PROVIDERS.map(p => p.isConfigured()))
+  const configured = PROVIDERS.filter((_, i) => flags[i])
 
   const results = await Promise.allSettled(configured.map(p => p.getQuotes(input)))
 

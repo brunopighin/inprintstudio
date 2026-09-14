@@ -9,7 +9,7 @@ const prisma = new PrismaClient()
 
 router.get('/agencies', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    if (!isCorreoArgentinoConfigured()) { res.status(400).json({ error: 'Correo Argentino no está configurado' }); return }
+    if (!(await isCorreoArgentinoConfigured())) { res.status(400).json({ error: 'Correo Argentino no está configurado' }); return }
     const province = toProvinceCode(String(req.query.province || ''))
     if (!province) { res.status(400).json({ error: 'Provincia inválida' }); return }
     const agencies = await getAgencies(province)
@@ -125,7 +125,7 @@ router.post('/:id/generate-shipment', requireAdmin, async (req: AuthRequest, res
       res.status(400).json({ error: 'La generación de envío solo está disponible para Correo Argentino' })
       return
     }
-    if (!isCorreoArgentinoConfigured()) {
+    if (!(await isCorreoArgentinoConfigured())) {
       res.status(400).json({ error: 'Correo Argentino no está configurado' })
       return
     }

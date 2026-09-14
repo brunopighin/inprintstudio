@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Package, Tag, ShoppingBag, Users,
-  Percent, Image, LogOut, Menu, X, Camera, ChevronRight
+  Percent, Image, LogOut, Menu, X, Camera, ChevronRight, Truck
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/admin/usuarios', icon: Users, label: 'Clientes' },
   { to: '/admin/promociones', icon: Percent, label: 'Promociones' },
   { to: '/admin/banners', icon: Image, label: 'Banners' },
+  { to: '/admin/envios', icon: Truck, label: 'Envíos' },
 ]
 
 export default function AdminLayout() {

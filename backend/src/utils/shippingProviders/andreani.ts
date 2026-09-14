@@ -18,7 +18,7 @@ import { ShippingProvider, QuoteInput, ShippingQuote } from './types'
 // No se llama a ningún endpoint con un esquema adivinado: es preferible no
 // mostrar Andreani como opción de envío a mostrar un precio incorrecto.
 
-function isConfigured() {
+async function isConfigured() {
   return false
 }
 

@@ -17,6 +17,6 @@ export interface ShippingQuote {
 
 export interface ShippingProvider {
   carrier: Carrier
-  isConfigured(): boolean
+  isConfigured(): Promise<boolean>
   getQuotes(input: QuoteInput): Promise<ShippingQuote[]>
 }
