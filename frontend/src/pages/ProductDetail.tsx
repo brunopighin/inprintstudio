@@ -1,9 +1,44 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ShoppingBag, Upload, ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { ShoppingBag, Upload, ChevronLeft, ChevronRight, Check, Crop as CropIcon } from 'lucide-react'
+import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
 import api from '../services/api'
 import { Product, ProductVariant } from '../types'
 import { useCart } from '../context/CartContext'
+
+const ASPECT_PRESETS: { label: string; value: number | undefined }[] = [
+  { label: 'Cuadrado', value: 1 },
+  { label: 'Horizontal', value: 3 / 2 },
+  { label: 'Vertical', value: 2 / 3 },
+  { label: 'Libre', value: undefined },
+]
+
+function centeredCropFor(aspect: number | undefined, mediaWidth: number, mediaHeight: number): Crop {
+  if (!aspect) {
+    return { unit: '%', x: 5, y: 5, width: 90, height: 90 }
+  }
+  return centerCrop(
+    makeAspectCrop({ unit: '%', width: 90 }, aspect, mediaWidth, mediaHeight),
+    mediaWidth,
+    mediaHeight
+  )
+}
+
+function getCroppedDataUrl(image: HTMLImageElement, crop: PixelCrop): string {
+  const canvas = document.createElement('canvas')
+  const scaleX = image.naturalWidth / image.width
+  const scaleY = image.naturalHeight / image.height
+  canvas.width = Math.round(crop.width * scaleX)
+  canvas.height = Math.round(crop.height * scaleY)
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(
+    image,
+    crop.x * scaleX, crop.y * scaleY, crop.width * scaleX, crop.height * scaleY,
+    0, 0, canvas.width, canvas.height
+  )
+  return canvas.toDataURL('image/jpeg', 0.92)
+}
 
 export default function ProductDetail() {
   const { slug } = useParams()
@@ -14,8 +49,15 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1)
   const [currentImg, setCurrentImg] = useState(0)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [rawPhotoSrc, setRawPhotoSrc] = useState<string | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [added, setAdded] = useState(false)
+
+  const [cropModalOpen, setCropModalOpen] = useState(false)
+  const [aspectPreset, setAspectPreset] = useState<number | undefined>(1)
+  const [crop, setCrop] = useState<Crop>()
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>()
+  const imgRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -28,13 +70,40 @@ export default function ProductDetail() {
       .finally(() => setLoading(false))
   }, [slug])
 
+  const openCropperFor = (src: string) => {
+    setRawPhotoSrc(src)
+    setAspectPreset(1)
+    setCrop(undefined)
+    setCompletedCrop(undefined)
+    setCropModalOpen(true)
+  }
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setPhotoFile(file)
     const reader = new FileReader()
-    reader.onload = ev => setPhotoPreview(ev.target?.result as string)
+    reader.onload = ev => openCropperFor(ev.target?.result as string)
     reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget
+    setCrop(centeredCropFor(aspectPreset, width, height))
+  }
+
+  const handleAspectChange = (aspect: number | undefined) => {
+    setAspectPreset(aspect)
+    if (imgRef.current) {
+      setCrop(centeredCropFor(aspect, imgRef.current.width, imgRef.current.height))
+    }
+  }
+
+  const confirmCrop = () => {
+    if (!imgRef.current || !completedCrop?.width || !completedCrop?.height) return
+    setPhotoPreview(getCroppedDataUrl(imgRef.current, completedCrop))
+    setCropModalOpen(false)
   }
 
   const handleAddToCart = () => {
@@ -187,10 +256,16 @@ export default function ProductDetail() {
                 <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
               </label>
               {photoPreview && (
-                <button onClick={() => { setPhotoFile(null); setPhotoPreview(null) }}
-                  className="text-xs text-gray-400 hover:text-red-600 mt-2 transition-colors">
-                  Eliminar foto
-                </button>
+                <div className="flex items-center gap-3 mt-2">
+                  <button onClick={() => rawPhotoSrc && openCropperFor(rawPhotoSrc)}
+                    className="text-xs text-gray-500 hover:text-black flex items-center gap-1 transition-colors">
+                    <CropIcon size={12} /> Recortar de nuevo
+                  </button>
+                  <button onClick={() => { setPhotoFile(null); setPhotoPreview(null); setRawPhotoSrc(null) }}
+                    className="text-xs text-gray-400 hover:text-red-600 transition-colors">
+                    Eliminar foto
+                  </button>
+                </div>
               )}
             </div>
 
@@ -230,6 +305,38 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      {/* Crop modal */}
+      {cropModalOpen && rawPhotoSrc && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <h3 className="font-bold text-lg mb-4">Recortá tu foto</h3>
+
+            <div className="flex gap-2 mb-4">
+              {ASPECT_PRESETS.map(p => (
+                <button
+                  key={p.label}
+                  onClick={() => handleAspectChange(p.value)}
+                  className={`px-3 py-2 text-xs font-semibold border-2 transition-colors ${aspectPreset === p.value ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-gray-400'}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex justify-center bg-gray-100 max-h-[55vh] overflow-auto">
+              <ReactCrop crop={crop} onChange={c => setCrop(c)} onComplete={c => setCompletedCrop(c)} aspect={aspectPreset}>
+                <img ref={imgRef} src={rawPhotoSrc} onLoad={handleImageLoad} alt="Recortar" style={{ maxHeight: '55vh' }} />
+              </ReactCrop>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setCropModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={confirmCrop} className="btn-primary flex-1">Usar esta foto</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
