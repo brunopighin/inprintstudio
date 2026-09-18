@@ -2,9 +2,22 @@ import { Router, Request, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { WebhookSignatureValidator, InvalidWebhookSignatureError } from 'mercadopago'
 import { paymentClient } from '../utils/mercadopago'
+import { getPaymentMethods, getTransferInfo } from '../utils/paymentMethods'
 
 const router = Router()
 const prisma = new PrismaClient()
+
+router.get('/methods', async (_req: Request, res: Response) => {
+  try {
+    const methods = await getPaymentMethods()
+    const transferMethod = methods.find(m => m.key === 'transfer')
+    const transfer = transferMethod?.enabled ? await getTransferInfo() : null
+    res.json({ methods, transfer })
+  } catch (err) {
+    console.error('Error al obtener medios de pago:', err)
+    res.status(500).json({ error: 'Error al obtener medios de pago' })
+  }
+})
 
 const MP_STATUS_MAP: Record<string, string> = {
   approved: 'APPROVED',

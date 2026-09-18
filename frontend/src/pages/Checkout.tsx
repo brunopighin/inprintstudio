@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Check, Truck, Store, CreditCard, ArrowLeft } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
-import { Carrier, CARRIER_LABELS, ShippingQuote, PROVINCES } from '../types'
+import { Carrier, CARRIER_LABELS, ShippingQuote, PROVINCES, PaymentMethodConfig, TransferInfo } from '../types'
 import api from '../services/api'
 
 type Step = 'contact' | 'shipping' | 'payment' | 'confirm'
@@ -24,8 +24,13 @@ interface CheckoutForm {
   province: string
   postalCode: string
   deliveryReference: string
-  paymentMethod: 'mercadopago' | 'transfer'
+  paymentMethod: string
   notes: string
+}
+
+const PAYMENT_METHOD_DESCRIPTIONS: Record<string, string> = {
+  mercadopago: 'Tarjeta de crédito, débito, dinero en cuenta',
+  transfer: 'Pagás y enviás el comprobante por WhatsApp',
 }
 
 function getShippingErrors(form: CheckoutForm) {
@@ -53,6 +58,9 @@ export default function Checkout() {
   const [quoteError, setQuoteError] = useState('')
   const [selectedCarrier, setSelectedCarrier] = useState<Carrier | null>(null)
 
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>([])
+  const [transferInfo, setTransferInfo] = useState<TransferInfo | null>(null)
+
   const [form, setForm] = useState<CheckoutForm>({
     customerName: user?.name || '',
     customerEmail: user?.email || '',
@@ -75,10 +83,25 @@ export default function Checkout() {
     setQuoteError('')
   }, [form.postalCode])
 
+  useEffect(() => {
+    api.get('/payments/methods').then(({ data }) => {
+      setPaymentMethods(data.methods)
+      setTransferInfo(data.transfer)
+      const enabledKeys = (data.methods as PaymentMethodConfig[]).filter(m => m.enabled).map(m => m.key)
+      if (enabledKeys.length && !enabledKeys.includes(form.paymentMethod)) {
+        update('paymentMethod', enabledKeys[0])
+      }
+    }).catch(() => setPaymentMethods([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const discount = 0
   const selectedQuote = quotes.find(q => q.carrier === selectedCarrier) || null
   const shippingCost = form.shippingMethod === 'shipping' ? (selectedQuote?.price ?? 0) : 0
-  const grandTotal = total - discount + shippingCost
+  const baseTotal = total - discount + shippingCost
+  const selectedMethod = paymentMethods.find(m => m.key === form.paymentMethod)
+  const paymentAdjustment = selectedMethod ? Math.round(baseTotal * (selectedMethod.adjustmentPercent / 100) * 100) / 100 : 0
+  const grandTotal = baseTotal + paymentAdjustment
   const shippingErrors = getShippingErrors(form)
 
   const fetchQuotes = async () => {
@@ -177,15 +200,16 @@ export default function Checkout() {
             <p>Te vamos a avisar por email cuando el pedido esté en camino.</p>
           </div>
         )}
-        {form.paymentMethod === 'transfer' && (
+        {form.paymentMethod === 'transfer' && transferInfo && (
           <div className="bg-gray-50 border border-gray-200 p-5 mb-8 text-left">
             <p className="font-bold mb-3">Datos para transferencia</p>
             <div className="space-y-1 text-sm text-gray-600">
-              <p>Banco: Banco Ejemplo</p>
-              <p>CBU: 0000003100000000000000</p>
-              <p>Alias: INPRINT.PAGOS</p>
-              <p>CUIL: 20-12345678-9</p>
-              <p className="mt-3 text-xs text-gray-400">Enviá el comprobante al WhatsApp o email y confirmamos tu pedido.</p>
+              {transferInfo.bank && <p>Banco: {transferInfo.bank}</p>}
+              {transferInfo.cbu && <p>CBU: {transferInfo.cbu}</p>}
+              {transferInfo.alias && <p>Alias: {transferInfo.alias}</p>}
+              {transferInfo.cuit && <p>CUIT/CUIL: {transferInfo.cuit}</p>}
+              {transferInfo.holder && <p>Titular: {transferInfo.holder}</p>}
+              <p className="mt-3 text-xs text-gray-400">{transferInfo.note || 'Enviá el comprobante al WhatsApp o email y confirmamos tu pedido.'}</p>
             </div>
           </div>
         )}
@@ -365,18 +389,23 @@ export default function Checkout() {
                   <h2 className="font-bold text-xl mb-6">Método de pago</h2>
 
                   <div className="space-y-3 mb-8">
-                    {[
-                      { key: 'mercadopago', label: 'MercadoPago', desc: 'Tarjeta de crédito, débito, dinero en cuenta' },
-                      { key: 'transfer', label: 'Transferencia bancaria', desc: 'Pagás y enviás el comprobante por WhatsApp' },
-                    ].map(opt => (
+                    {paymentMethods.length === 0 && (
+                      <p className="text-sm text-gray-400">Cargando medios de pago…</p>
+                    )}
+                    {paymentMethods.filter(m => m.enabled).map(opt => (
                       <label key={opt.key} className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-colors ${form.paymentMethod === opt.key ? 'border-black' : 'border-gray-200 hover:border-gray-400'}`}>
-                        <input type="radio" name="payment" value={opt.key} checked={form.paymentMethod === opt.key as 'mercadopago' | 'transfer'} onChange={() => update('paymentMethod', opt.key)} className="sr-only" />
+                        <input type="radio" name="payment" value={opt.key} checked={form.paymentMethod === opt.key} onChange={() => update('paymentMethod', opt.key)} className="sr-only" />
                         <CreditCard size={20} className={form.paymentMethod === opt.key ? 'text-black' : 'text-gray-400'} />
-                        <div>
+                        <div className="flex-1">
                           <p className="font-semibold text-sm">{opt.label}</p>
-                          <p className="text-xs text-gray-500">{opt.desc}</p>
+                          <p className="text-xs text-gray-500">{PAYMENT_METHOD_DESCRIPTIONS[opt.key] || ''}</p>
                         </div>
-                        {form.paymentMethod === opt.key && <Check size={16} className="ml-auto text-black" />}
+                        {opt.adjustmentPercent !== 0 && (
+                          <span className={`text-xs font-bold ${opt.adjustmentPercent > 0 ? 'text-gray-500' : 'text-green-600'}`}>
+                            {opt.adjustmentPercent > 0 ? '+' : ''}{opt.adjustmentPercent}%
+                          </span>
+                        )}
+                        {form.paymentMethod === opt.key && <Check size={16} className="text-black" />}
                       </label>
                     ))}
                   </div>
@@ -438,6 +467,12 @@ export default function Checkout() {
                   <span className="text-gray-500">Envío</span>
                   <span>{form.shippingMethod === 'pickup' ? 'Gratis' : selectedQuote ? formatPrice(shippingCost) : 'A cotizar'}</span>
                 </div>
+                {step === 'payment' && paymentAdjustment !== 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">{paymentAdjustment > 0 ? 'Recargo' : 'Descuento'} por medio de pago</span>
+                    <span>{paymentAdjustment > 0 ? '+' : '-'}{formatPrice(Math.abs(paymentAdjustment))}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-black text-lg pt-2 border-t border-gray-200">
                   <span>Total</span>
                   <span>{formatPrice(grandTotal)}</span>

@@ -17,19 +17,30 @@ interface SettingsForm {
   SENDER_CITY: string
   SENDER_PROVINCE: string
   SENDER_POSTAL_CODE: string
-  OCA_CUIT: string
-  OCA_OPERATIVA: string
   ORIGIN_POSTAL_CODE: string
+  MERCADOPAGO_ENABLED: string
+  MERCADOPAGO_ADJUSTMENT_PERCENT: string
+  TRANSFER_ENABLED: string
+  TRANSFER_ADJUSTMENT_PERCENT: string
+  TRANSFER_BANK: string
+  TRANSFER_CBU: string
+  TRANSFER_ALIAS: string
+  TRANSFER_CUIT: string
+  TRANSFER_HOLDER: string
+  TRANSFER_NOTE: string
 }
 
 const EMPTY_FORM: SettingsForm = {
   MICORREO_USER: '', MICORREO_PASSWORD: '', MICORREO_ENVIRONMENT: 'production',
   SENDER_NAME: '', SENDER_PHONE: '', SENDER_EMAIL: '', SENDER_STREET: '', SENDER_NUMBER: '',
   SENDER_FLOOR: '', SENDER_APARTMENT: '', SENDER_CITY: '', SENDER_PROVINCE: '', SENDER_POSTAL_CODE: '',
-  OCA_CUIT: '', OCA_OPERATIVA: '', ORIGIN_POSTAL_CODE: '',
+  ORIGIN_POSTAL_CODE: '',
+  MERCADOPAGO_ENABLED: 'true', MERCADOPAGO_ADJUSTMENT_PERCENT: '0',
+  TRANSFER_ENABLED: 'true', TRANSFER_ADJUSTMENT_PERCENT: '0',
+  TRANSFER_BANK: '', TRANSFER_CBU: '', TRANSFER_ALIAS: '', TRANSFER_CUIT: '', TRANSFER_HOLDER: '', TRANSFER_NOTE: '',
 }
 
-export default function AdminShippingSettings() {
+export default function AdminSettings() {
   const [form, setForm] = useState<SettingsForm>(EMPTY_FORM)
   const [passwordSet, setPasswordSet] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -41,7 +52,15 @@ export default function AdminShippingSettings() {
   useEffect(() => {
     api.get('/admin/settings').then(r => {
       const { micorreoPasswordSet, ...values } = r.data
-      setForm(f => ({ ...f, ...values, MICORREO_PASSWORD: '', MICORREO_ENVIRONMENT: values.MICORREO_ENVIRONMENT || 'production' }))
+      setForm(f => ({
+        ...f, ...values,
+        MICORREO_PASSWORD: '',
+        MICORREO_ENVIRONMENT: values.MICORREO_ENVIRONMENT || 'production',
+        MERCADOPAGO_ENABLED: values.MERCADOPAGO_ENABLED || 'true',
+        MERCADOPAGO_ADJUSTMENT_PERCENT: values.MERCADOPAGO_ADJUSTMENT_PERCENT || '0',
+        TRANSFER_ENABLED: values.TRANSFER_ENABLED || 'true',
+        TRANSFER_ADJUSTMENT_PERCENT: values.TRANSFER_ADJUSTMENT_PERCENT || '0',
+      }))
       setPasswordSet(Boolean(micorreoPasswordSet))
       setLoading(false)
     })
@@ -85,8 +104,8 @@ export default function AdminShippingSettings() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-black">Envíos</h1>
-        <p className="text-gray-500 text-sm mt-1">Credenciales y datos de remitente para cotizar y generar envíos.</p>
+        <h1 className="text-2xl font-black">Configuración</h1>
+        <p className="text-gray-500 text-sm mt-1">Envíos y medios de pago de la tienda.</p>
       </div>
 
       <div className="bg-white border border-gray-200 p-6 space-y-4">
@@ -181,6 +200,69 @@ export default function AdminShippingSettings() {
           <label className="label">Código postal de origen</label>
           <input className="input-base max-w-[180px]" value={form.ORIGIN_POSTAL_CODE} onChange={e => update('ORIGIN_POSTAL_CODE', e.target.value)} placeholder="1900" />
           <p className="text-xs text-gray-400 mt-1">El código postal de tu local/depósito, usado para cotizar envíos.</p>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-200 p-6 space-y-6">
+        <div>
+          <h2 className="font-bold">Medios de pago</h2>
+          <p className="text-xs text-gray-400 mt-1">Activá o desactivá cada medio y definí un % de recargo (positivo) o descuento (negativo) sobre el total del pedido.</p>
+        </div>
+
+        <div className="space-y-3 pb-5 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-sm">MercadoPago</p>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="w-4 h-4" checked={form.MERCADOPAGO_ENABLED === 'true'} onChange={e => update('MERCADOPAGO_ENABLED', e.target.checked ? 'true' : 'false')} />
+              Activo
+            </label>
+          </div>
+          <div className="max-w-[200px]">
+            <label className="label">% de ajuste</label>
+            <input className="input-base" type="number" step="0.01" value={form.MERCADOPAGO_ADJUSTMENT_PERCENT} onChange={e => update('MERCADOPAGO_ADJUSTMENT_PERCENT', e.target.value)} />
+            <p className="text-xs text-gray-400 mt-1">Dejalo en 0 si tus precios de lista ya incluyen la comisión de MercadoPago.</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-sm">Transferencia bancaria</p>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="w-4 h-4" checked={form.TRANSFER_ENABLED === 'true'} onChange={e => update('TRANSFER_ENABLED', e.target.checked ? 'true' : 'false')} />
+              Activo
+            </label>
+          </div>
+          <div className="max-w-[200px]">
+            <label className="label">% de ajuste</label>
+            <input className="input-base" type="number" step="0.01" value={form.TRANSFER_ADJUSTMENT_PERCENT} onChange={e => update('TRANSFER_ADJUSTMENT_PERCENT', e.target.value)} />
+            <p className="text-xs text-gray-400 mt-1">Ej: -10 para un 10% de descuento pagando por transferencia.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Banco</label>
+              <input className="input-base" value={form.TRANSFER_BANK} onChange={e => update('TRANSFER_BANK', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Titular</label>
+              <input className="input-base" value={form.TRANSFER_HOLDER} onChange={e => update('TRANSFER_HOLDER', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">CBU</label>
+              <input className="input-base" value={form.TRANSFER_CBU} onChange={e => update('TRANSFER_CBU', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Alias</label>
+              <input className="input-base" value={form.TRANSFER_ALIAS} onChange={e => update('TRANSFER_ALIAS', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">CUIT / CUIL</label>
+              <input className="input-base" value={form.TRANSFER_CUIT} onChange={e => update('TRANSFER_CUIT', e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Nota para el cliente (opcional)</label>
+            <textarea className="input-base resize-none" rows={2} value={form.TRANSFER_NOTE} onChange={e => update('TRANSFER_NOTE', e.target.value)} placeholder="Enviá el comprobante al WhatsApp o email y confirmamos tu pedido." />
+          </div>
         </div>
       </div>
 

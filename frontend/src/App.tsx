@@ -19,7 +19,7 @@ import AdminOrders from './pages/admin/AdminOrders'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminPromotions from './pages/admin/AdminPromotions'
 import AdminBanners from './pages/admin/AdminBanners'
-import AdminShippingSettings from './pages/admin/AdminShippingSettings'
+import AdminSettings from './pages/admin/AdminSettings'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -61,7 +61,7 @@ export default function App() {
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="promociones" element={<AdminPromotions />} />
           <Route path="banners" element={<AdminBanners />} />
-          <Route path="envios" element={<AdminShippingSettings />} />
+          <Route path="configuracion" element={<AdminSettings />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

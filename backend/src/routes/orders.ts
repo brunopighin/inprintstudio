@@ -4,6 +4,7 @@ import { optionalAuth, authenticate, AuthRequest } from '../middleware/auth'
 import { preferenceClient } from '../utils/mercadopago'
 import { Carrier, CARRIER_LABELS, computeOrderPhysicals } from '../utils/shipping'
 import { getShippingQuotes } from '../utils/shippingProviders'
+import { getPaymentMethod, calcAdjustment } from '../utils/paymentMethods'
 
 const router = Router()
 const prisma = new PrismaClient()
@@ -67,6 +68,30 @@ async function resolveItems(items: CartItemInput[]) {
   return { subtotal, weightGrams, dimensionsCm, orderItems, preferenceItems }
 }
 
+type PreferenceItem = ReturnType<typeof resolveItems> extends Promise<infer R>
+  ? R extends { preferenceItems: (infer I)[] } ? I : never
+  : never
+
+// Refleja el recargo/descuento por medio de pago en lo que se le cobra al
+// cliente en MercadoPago. Un recargo se suma como ítem aparte; un descuento
+// se prorratea entre los ítems porque la API no acepta unit_price negativo.
+function applyPaymentAdjustment(items: PreferenceItem[], adjustment: number): PreferenceItem[] {
+  if (adjustment === 0) return items
+  if (adjustment > 0) {
+    return [...items, {
+      id: 'payment-adjustment',
+      title: 'Recargo por medio de pago',
+      quantity: 1,
+      unit_price: adjustment,
+      currency_id: 'ARS',
+    }]
+  }
+  const base = items.reduce((sum, it) => sum + it.unit_price * it.quantity, 0)
+  if (base <= 0) return items
+  const factor = Math.max(0, (base + adjustment) / base)
+  return items.map(it => ({ ...it, unit_price: Math.round(it.unit_price * factor * 100) / 100 }))
+}
+
 router.post('/shipping-quote', async (req, res: Response) => {
   try {
     const { postalCode, items } = req.body
@@ -118,6 +143,12 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    const paymentMethodConfig = await getPaymentMethod(paymentMethod)
+    if (!paymentMethodConfig || !paymentMethodConfig.enabled) {
+      res.status(400).json({ error: 'El medio de pago elegido no está disponible' })
+      return
+    }
+
     const DISCOUNT = 0
 
     const { subtotal, weightGrams, dimensionsCm, orderItems, preferenceItems } = await resolveItems(items)
@@ -147,7 +178,9 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const total = subtotal - DISCOUNT + SHIPPING_COST
+    const totalBeforeAdjustment = subtotal - DISCOUNT + SHIPPING_COST
+    const paymentAdjustment = calcAdjustment(totalBeforeAdjustment, paymentMethodConfig.adjustmentPercent)
+    const total = totalBeforeAdjustment + paymentAdjustment
 
     const order = await prisma.order.create({
       data: {
@@ -160,6 +193,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         subtotal,
         discount: DISCOUNT,
         shippingCost: SHIPPING_COST,
+        paymentAdjustment,
         total,
         shippingMethod,
         shippingCarrier: shippingMethod === 'shipping' ? shippingCarrier : null,
@@ -179,7 +213,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5175').replace(/\/$/, '')
       const preference = await preferenceClient.create({
         body: {
-          items: preferenceItems,
+          items: applyPaymentAdjustment(preferenceItems, paymentAdjustment),
           payer: { name: customerName, email: customerEmail },
           external_reference: order.id,
           back_urls: {

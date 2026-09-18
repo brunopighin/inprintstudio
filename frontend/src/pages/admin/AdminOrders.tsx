@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Search, ChevronDown, ChevronUp, X, Truck, Download } from 'lucide-react'
 import api from '../../services/api'
-import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS, PROVINCE_NAMES } from '../../types'
+import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, PROVINCE_NAMES } from '../../types'
 
 interface Agency {
   code: string
@@ -298,7 +298,7 @@ export default function AdminOrders() {
                                   <p>Envío: {order.shippingCarrier ? CARRIER_LABELS[order.shippingCarrier] : '—'} · ${order.shippingCost.toLocaleString('es-AR')}</p>
                                 )}
                                 <p>
-                                  Pago: {order.paymentMethod === 'mercadopago' ? 'MercadoPago' : 'Transferencia'}
+                                  Pago: {PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod}
                                   {' · '}
                                   <span className={
                                     order.paymentStatus === 'APPROVED' ? 'text-green-600 font-semibold'

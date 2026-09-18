@@ -116,6 +116,27 @@ export interface ShippingQuote {
   etaDaysMax?: number
 }
 
+export interface PaymentMethodConfig {
+  key: string
+  label: string
+  enabled: boolean
+  adjustmentPercent: number
+}
+
+export interface TransferInfo {
+  bank: string
+  cbu: string
+  alias: string
+  cuit: string
+  holder: string
+  note: string
+}
+
+export const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  mercadopago: 'MercadoPago',
+  transfer: 'Transferencia',
+}
+
 export interface OrderItem {
   id: string
   productId: string
@@ -140,6 +161,7 @@ export interface Order {
   subtotal: number
   discount: number
   shippingCost: number
+  paymentAdjustment: number
   total: number
   shippingMethod: ShippingMethod
   shippingCarrier?: Carrier
