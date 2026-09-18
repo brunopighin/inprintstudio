@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check, X, Plug } from 'lucide-react'
 import api from '../../services/api'
 import { PROVINCES } from '../../types'
 
 interface SettingsForm {
   MICORREO_USER: string
   MICORREO_PASSWORD: string
+  MICORREO_ENVIRONMENT: string
   SENDER_NAME: string
   SENDER_PHONE: string
   SENDER_EMAIL: string
@@ -22,7 +23,7 @@ interface SettingsForm {
 }
 
 const EMPTY_FORM: SettingsForm = {
-  MICORREO_USER: '', MICORREO_PASSWORD: '',
+  MICORREO_USER: '', MICORREO_PASSWORD: '', MICORREO_ENVIRONMENT: 'production',
   SENDER_NAME: '', SENDER_PHONE: '', SENDER_EMAIL: '', SENDER_STREET: '', SENDER_NUMBER: '',
   SENDER_FLOOR: '', SENDER_APARTMENT: '', SENDER_CITY: '', SENDER_PROVINCE: '', SENDER_POSTAL_CODE: '',
   OCA_CUIT: '', OCA_OPERATIVA: '', ORIGIN_POSTAL_CODE: '',
@@ -34,11 +35,13 @@ export default function AdminShippingSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     api.get('/admin/settings').then(r => {
       const { micorreoPasswordSet, ...values } = r.data
-      setForm(f => ({ ...f, ...values, MICORREO_PASSWORD: '' }))
+      setForm(f => ({ ...f, ...values, MICORREO_PASSWORD: '', MICORREO_ENVIRONMENT: values.MICORREO_ENVIRONMENT || 'production' }))
       setPasswordSet(Boolean(micorreoPasswordSet))
       setLoading(false)
     })
@@ -60,6 +63,23 @@ export default function AdminShippingSettings() {
     }
   }
 
+  const isAxiosError = (e: unknown): e is { response?: { data?: { error?: string } } } =>
+    typeof e === 'object' && e !== null && 'response' in e
+
+  const handleTestConnection = async () => {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const { data } = await api.post('/admin/settings/correo-argentino/test-connection')
+      setTestResult({ ok: true, message: `Conexión OK — customerId ${data.customerId}` })
+    } catch (err) {
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined
+      setTestResult({ ok: false, message: message || 'No se pudo conectar con MiCorreo' })
+    } finally {
+      setTesting(false)
+    }
+  }
+
   if (loading) return <div className="p-8 text-center text-gray-400">Cargando...</div>
 
   return (
@@ -70,7 +90,23 @@ export default function AdminShippingSettings() {
       </div>
 
       <div className="bg-white border border-gray-200 p-6 space-y-4">
-        <h2 className="font-bold">Correo Argentino (MiCorreo)</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-bold">Correo Argentino (MiCorreo)</h2>
+          <button
+            type="button"
+            onClick={handleTestConnection}
+            disabled={testing}
+            className="btn-secondary py-1.5 px-3 text-xs gap-1.5 disabled:opacity-50"
+          >
+            <Plug size={13} /> {testing ? 'Probando conexión...' : 'Probar conexión'}
+          </button>
+        </div>
+        {testResult && (
+          <p className={`text-sm flex items-center gap-1.5 ${testResult.ok ? 'text-green-700' : 'text-red-600'}`}>
+            {testResult.ok ? <Check size={14} /> : <X size={14} />} {testResult.message}
+          </p>
+        )}
+        <p className="text-xs text-gray-400 -mt-2">Prueba la conexión con lo que ya está guardado — guardá los cambios antes de probar.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="label">Usuario (email de la cuenta MiCorreo)</label>
@@ -79,6 +115,14 @@ export default function AdminShippingSettings() {
           <div>
             <label className="label">Contraseña {passwordSet && <span className="text-green-600 font-normal">(ya cargada)</span>}</label>
             <input className="input-base" type="password" value={form.MICORREO_PASSWORD} onChange={e => update('MICORREO_PASSWORD', e.target.value)} placeholder={passwordSet ? '•••••••• (dejar en blanco para no cambiar)' : ''} />
+          </div>
+          <div>
+            <label className="label">Ambiente</label>
+            <select className="input-base" value={form.MICORREO_ENVIRONMENT} onChange={e => update('MICORREO_ENVIRONMENT', e.target.value)}>
+              <option value="production">Producción</option>
+              <option value="sandbox">Pruebas (sandbox)</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Dejalo en "Producción" salvo que Correo te haya dado credenciales de prueba.</p>
           </div>
         </div>
 

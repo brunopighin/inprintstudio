@@ -22,12 +22,24 @@ import { getSetting, getSettings } from '../settings'
 const DEFAULT_INTEGRATOR_USER = 'WOOCOMMERCE'
 const DEFAULT_INTEGRATOR_PASS = 'Paneles55+'
 
+const MICORREO_URLS = {
+  production: 'https://api.correoargentino.com.ar/micorreo/v1',
+  sandbox: 'https://apitest.correoargentino.com.ar/micorreo/v1',
+}
+
 let cachedToken: { token: string; expiresAt: number } | null = null
 let cachedCustomerId: string | null = null
 
+// Ambiente elegido en el admin (Configuración → Envíos), no una URL a mano —
+// evita depender de una variable de entorno que nadie termina cargando.
+async function getBaseUrl(): Promise<string> {
+  const env = await getSetting('MICORREO_ENVIRONMENT')
+  return env === 'sandbox' ? MICORREO_URLS.sandbox : MICORREO_URLS.production
+}
+
 export async function isConfigured() {
   const creds = await getSettings(['MICORREO_USER', 'MICORREO_PASSWORD'])
-  return Boolean(process.env.MICORREO_BASE_URL && creds.MICORREO_USER && creds.MICORREO_PASSWORD)
+  return Boolean(creds.MICORREO_USER && creds.MICORREO_PASSWORD)
 }
 
 // Se llama después de guardar credenciales nuevas en el admin, para no seguir
@@ -42,7 +54,7 @@ async function getToken(): Promise<string> {
     return cachedToken.token
   }
 
-  const baseUrl = process.env.MICORREO_BASE_URL!.replace(/\/$/, '')
+  const baseUrl = await getBaseUrl()
   const integratorUser = process.env.MICORREO_INTEGRATOR_USER || DEFAULT_INTEGRATOR_USER
   const integratorPass = process.env.MICORREO_INTEGRATOR_PASS || DEFAULT_INTEGRATOR_PASS
   const credentials = Buffer.from(`${integratorUser}:${integratorPass}`).toString('base64')
@@ -59,7 +71,7 @@ async function getToken(): Promise<string> {
 async function getCustomerId(): Promise<string> {
   if (cachedCustomerId) return cachedCustomerId
 
-  const baseUrl = process.env.MICORREO_BASE_URL!.replace(/\/$/, '')
+  const baseUrl = await getBaseUrl()
   const token = await getToken()
   const res = await fetch(`${baseUrl}/users/validate`, {
     method: 'POST',
@@ -72,15 +84,31 @@ async function getCustomerId(): Promise<string> {
       password: await getSetting('MICORREO_PASSWORD'),
     }),
   })
-  if (!res.ok) throw new Error(`MiCorreo users/validate error: ${res.status}`)
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null) as { message?: string } | null
+    if (res.status === 404 || res.status === 401) {
+      throw new Error('Usuario o contraseña de MiCorreo incorrectos.')
+    }
+    throw new Error(errBody?.message || `MiCorreo users/validate error: ${res.status}`)
+  }
   const data = await res.json() as { customerId: string }
   if (!data.customerId) throw new Error('MiCorreo: no se pudo obtener el customerId')
   cachedCustomerId = data.customerId
   return data.customerId
 }
 
+// Igual que el botón "Probar conexión" del plugin oficial: fuerza un token y
+// un customerId nuevos (ignorando la caché) para validar que las credenciales
+// cargadas realmente funcionan contra MiCorreo.
+export async function testConnection(): Promise<{ customerId: string }> {
+  resetCache()
+  await getToken()
+  const customerId = await getCustomerId()
+  return { customerId }
+}
+
 async function getQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
-  const baseUrl = process.env.MICORREO_BASE_URL!.replace(/\/$/, '')
+  const baseUrl = await getBaseUrl()
   const [token, customerId] = await Promise.all([getToken(), getCustomerId()])
 
   const res = await fetch(`${baseUrl}/rates`, {
@@ -182,7 +210,7 @@ export interface Agency {
 }
 
 export async function getAgencies(provinceCode: string): Promise<Agency[]> {
-  const baseUrl = process.env.MICORREO_BASE_URL!.replace(/\/$/, '')
+  const baseUrl = await getBaseUrl()
   const [token, customerId] = await Promise.all([getToken(), getCustomerId()])
 
   const url = new URL(`${baseUrl}/agencies`)
@@ -254,7 +282,7 @@ export function buildShipmentAddress(rawAddress: string, city: string, province:
 }
 
 export async function importShipment(params: ImportShipmentParams): Promise<void> {
-  const baseUrl = process.env.MICORREO_BASE_URL!.replace(/\/$/, '')
+  const baseUrl = await getBaseUrl()
   const [token, customerId] = await Promise.all([getToken(), getCustomerId()])
 
   const sender = await getSettings([
