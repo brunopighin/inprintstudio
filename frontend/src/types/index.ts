@@ -14,6 +14,10 @@ export interface ProductVariant {
   quantity?: number
   price: number
   stock: number
+  weightGrams?: number
+  lengthCm?: number
+  widthCm?: number
+  heightCm?: number
 }
 
 export interface Category {
@@ -45,6 +49,10 @@ export interface Product {
   subcategory?: Subcategory
   images: string
   basePrice: number
+  weightGrams?: number
+  lengthCm?: number
+  widthCm?: number
+  heightCm?: number
   variants: ProductVariant[]
   active: boolean
   featured: boolean

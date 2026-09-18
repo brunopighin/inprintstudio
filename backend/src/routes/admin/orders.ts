@@ -1,7 +1,7 @@
 import { Router, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { requireAdmin, AuthRequest } from '../../middleware/auth'
-import { CARRIERS, DEFAULT_PACKAGE_DIMENSIONS_CM } from '../../utils/shipping'
+import { CARRIERS, computeOrderPhysicals } from '../../utils/shipping'
 import { getAgencies, importShipment, buildShipmentAddress, toProvinceCode, isConfigured as isCorreoArgentinoConfigured } from '../../utils/shippingProviders/correoArgentino'
 
 const router = Router()
@@ -118,7 +118,7 @@ router.post('/:id/generate-shipment', requireAdmin, async (req: AuthRequest, res
   try {
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },
-      include: { items: { include: { variant: true } } },
+      include: { items: { include: { product: true, variant: true } } },
     })
     if (!order) { res.status(404).json({ error: 'Pedido no encontrado' }); return }
     if (order.shippingCarrier !== 'correo_argentino') {
@@ -138,7 +138,13 @@ router.post('/:id/generate-shipment', requireAdmin, async (req: AuthRequest, res
       return
     }
 
-    const weightGrams = order.items.reduce((sum, item) => sum + (item.variant?.weightGrams ?? 500) * item.quantity, 0)
+    const { weightGrams, dimensionsCm } = computeOrderPhysicals(order.items.map(item => ({
+      quantity: item.quantity,
+      weightGrams: item.variant?.weightGrams ?? item.product.weightGrams,
+      lengthCm: item.variant?.lengthCm ?? item.product.lengthCm,
+      widthCm: item.variant?.widthCm ?? item.product.widthCm,
+      heightCm: item.variant?.heightCm ?? item.product.heightCm,
+    })))
 
     try {
       await importShipment({
@@ -152,7 +158,7 @@ router.post('/:id/generate-shipment', requireAdmin, async (req: AuthRequest, res
         address: buildShipmentAddress(order.shippingAddress, order.locality, order.province, order.postalCode),
         declaredValue: order.subtotal,
         weightGrams,
-        dimensionsCm: DEFAULT_PACKAGE_DIMENSIONS_CM,
+        dimensionsCm,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error desconocido'

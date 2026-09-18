@@ -60,6 +60,10 @@ model Product {
   subcategory   Subcategory?     @relation(fields: [subcategoryId], references: [id])
   images        String           @default("[]")
   basePrice     Float
+  weightGrams   Int?
+  lengthCm      Int?
+  widthCm       Int?
+  heightCm      Int?
   variants      ProductVariant[]
   active        Boolean          @default(true)
   featured      Boolean          @default(false)
@@ -80,6 +84,9 @@ model ProductVariant {
   stock      Int         @default(999)
   sku        String?
   weightGrams Int?       @default(500)
+  lengthCm   Int?
+  widthCm    Int?
+  heightCm   Int?
   orderItems OrderItem[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt

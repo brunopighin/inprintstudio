@@ -10,9 +10,16 @@ interface VariantInput {
   quantity: string
   price: string
   stock: string
+  weightGrams: string
+  lengthCm: string
+  widthCm: string
+  heightCm: string
 }
 
-const emptyVariant = (): VariantInput => ({ label: '', size: '', paperType: '', quantity: '', price: '', stock: '999' })
+const emptyVariant = (): VariantInput => ({
+  label: '', size: '', paperType: '', quantity: '', price: '', stock: '999',
+  weightGrams: '', lengthCm: '', widthCm: '', heightCm: '',
+})
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([])
@@ -32,6 +39,7 @@ export default function AdminProducts() {
   const [form, setForm] = useState({
     name: '', description: '', categoryId: '', subcategoryId: '',
     images: '', basePrice: '', featured: false, active: true,
+    weightGrams: '', lengthCm: '', widthCm: '', heightCm: '',
   })
   const [variants, setVariants] = useState<VariantInput[]>([emptyVariant()])
 
@@ -69,7 +77,7 @@ export default function AdminProducts() {
 
   const openCreate = () => {
     setEditProduct(null)
-    setForm({ name: '', description: '', categoryId: '', subcategoryId: '', images: '', basePrice: '', featured: false, active: true })
+    setForm({ name: '', description: '', categoryId: '', subcategoryId: '', images: '', basePrice: '', featured: false, active: true, weightGrams: '', lengthCm: '', widthCm: '', heightCm: '' })
     setVariants([emptyVariant()])
     setUploadError('')
     setModalOpen(true)
@@ -83,10 +91,14 @@ export default function AdminProducts() {
       categoryId: p.categoryId, subcategoryId: p.subcategoryId || '',
       images: imgs.join('\n'), basePrice: String(p.basePrice),
       featured: p.featured, active: p.active,
+      weightGrams: String(p.weightGrams ?? ''), lengthCm: String(p.lengthCm ?? ''),
+      widthCm: String(p.widthCm ?? ''), heightCm: String(p.heightCm ?? ''),
     })
     setVariants(p.variants.length > 0 ? p.variants.map(v => ({
       label: v.label, size: v.size || '', paperType: v.paperType || '',
       quantity: String(v.quantity || ''), price: String(v.price), stock: String(v.stock),
+      weightGrams: String(v.weightGrams ?? ''), lengthCm: String(v.lengthCm ?? ''),
+      widthCm: String(v.widthCm ?? ''), heightCm: String(v.heightCm ?? ''),
     })) : [emptyVariant()])
     setUploadError('')
     setModalOpen(true)
@@ -104,6 +116,8 @@ export default function AdminProducts() {
           label: v.label, size: v.size || null, paperType: v.paperType || null,
           quantity: v.quantity ? Number(v.quantity) : null,
           price: Number(v.price), stock: Number(v.stock || 999),
+          weightGrams: v.weightGrams || null, lengthCm: v.lengthCm || null,
+          widthCm: v.widthCm || null, heightCm: v.heightCm || null,
         })),
       }
       if (editProduct) await api.put(`/admin/products/${editProduct.id}`, payload)
@@ -289,6 +303,16 @@ export default function AdminProducts() {
                 <input className="input-base" type="number" value={form.basePrice} onChange={e => setForm(f => ({ ...f, basePrice: e.target.value }))} />
               </div>
               <div>
+                <label className="label mb-2">Peso y medidas del paquete</label>
+                <p className="text-xs text-gray-400 -mt-1 mb-2">Se usan para cotizar y generar el envío. Si el producto tiene variantes de distinto tamaño, cargalas ahí en vez de acá.</p>
+                <div className="grid grid-cols-4 gap-2">
+                  <input className="input-base py-2 text-sm" type="number" placeholder="Peso (g)" value={form.weightGrams} onChange={e => setForm(f => ({ ...f, weightGrams: e.target.value }))} />
+                  <input className="input-base py-2 text-sm" type="number" placeholder="Largo (cm)" value={form.lengthCm} onChange={e => setForm(f => ({ ...f, lengthCm: e.target.value }))} />
+                  <input className="input-base py-2 text-sm" type="number" placeholder="Ancho (cm)" value={form.widthCm} onChange={e => setForm(f => ({ ...f, widthCm: e.target.value }))} />
+                  <input className="input-base py-2 text-sm" type="number" placeholder="Alto (cm)" value={form.heightCm} onChange={e => setForm(f => ({ ...f, heightCm: e.target.value }))} />
+                </div>
+              </div>
+              <div>
                 <label className="label">Imágenes</label>
                 {imageList.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
@@ -351,6 +375,12 @@ export default function AdminProducts() {
                       <input className="input-base py-2 text-sm" placeholder="Papel (ej: Brillante)" value={v.paperType} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, paperType: e.target.value } : x))} />
                       <input className="input-base py-2 text-sm" type="number" placeholder="Cantidad" value={v.quantity} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, quantity: e.target.value } : x))} />
                       <input className="input-base py-2 text-sm" type="number" placeholder="Precio *" value={v.price} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, price: e.target.value } : x))} />
+                      <div className="col-span-2 grid grid-cols-4 gap-2 pt-1 border-t border-gray-100 mt-1">
+                        <input className="input-base py-1.5 text-xs" type="number" placeholder="Peso (g)" value={v.weightGrams} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, weightGrams: e.target.value } : x))} />
+                        <input className="input-base py-1.5 text-xs" type="number" placeholder="Largo (cm)" value={v.lengthCm} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, lengthCm: e.target.value } : x))} />
+                        <input className="input-base py-1.5 text-xs" type="number" placeholder="Ancho (cm)" value={v.widthCm} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, widthCm: e.target.value } : x))} />
+                        <input className="input-base py-1.5 text-xs" type="number" placeholder="Alto (cm)" value={v.heightCm} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, heightCm: e.target.value } : x))} />
+                      </div>
                     </div>
                   ))}
                 </div>

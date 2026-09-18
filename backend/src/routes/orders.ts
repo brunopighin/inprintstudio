@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { optionalAuth, authenticate, AuthRequest } from '../middleware/auth'
 import { preferenceClient } from '../utils/mercadopago'
-import { Carrier, CARRIER_LABELS, DEFAULT_PACKAGE_DIMENSIONS_CM } from '../utils/shipping'
+import { Carrier, CARRIER_LABELS, computeOrderPhysicals } from '../utils/shipping'
 import { getShippingQuotes } from '../utils/shippingProviders'
 
 const router = Router()
@@ -29,7 +29,7 @@ interface CartItemInput {
 
 async function resolveItems(items: CartItemInput[]) {
   let subtotal = 0
-  let weightGrams = 0
+  const physicalItems = []
   const orderItems = []
   const preferenceItems = []
   for (const item of items) {
@@ -40,7 +40,13 @@ async function resolveItems(items: CartItemInput[]) {
     if (!product) continue
     const price = variant?.price ?? product.basePrice
     subtotal += price * item.quantity
-    weightGrams += (variant?.weightGrams ?? 500) * item.quantity
+    physicalItems.push({
+      quantity: item.quantity,
+      weightGrams: variant?.weightGrams ?? product.weightGrams,
+      lengthCm: variant?.lengthCm ?? product.lengthCm,
+      widthCm: variant?.widthCm ?? product.widthCm,
+      heightCm: variant?.heightCm ?? product.heightCm,
+    })
     orderItems.push({
       productId: item.productId,
       variantId: item.variantId || null,
@@ -57,7 +63,8 @@ async function resolveItems(items: CartItemInput[]) {
       currency_id: 'ARS',
     })
   }
-  return { subtotal, weightGrams, orderItems, preferenceItems }
+  const { weightGrams, dimensionsCm } = computeOrderPhysicals(physicalItems)
+  return { subtotal, weightGrams, dimensionsCm, orderItems, preferenceItems }
 }
 
 router.post('/shipping-quote', async (req, res: Response) => {
@@ -68,11 +75,11 @@ router.post('/shipping-quote', async (req, res: Response) => {
       return
     }
 
-    const { subtotal, weightGrams } = await resolveItems(items)
+    const { subtotal, weightGrams, dimensionsCm } = await resolveItems(items)
     const quotes = await getShippingQuotes({
       postalCodeDestination: String(postalCode),
       weightGrams,
-      dimensionsCm: DEFAULT_PACKAGE_DIMENSIONS_CM,
+      dimensionsCm,
       declaredValue: subtotal,
     })
     res.json(quotes)
@@ -113,14 +120,14 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     const DISCOUNT = 0
 
-    const { subtotal, weightGrams, orderItems, preferenceItems } = await resolveItems(items)
+    const { subtotal, weightGrams, dimensionsCm, orderItems, preferenceItems } = await resolveItems(items)
 
     let SHIPPING_COST = 0
     if (shippingMethod === 'shipping') {
       const quotes = await getShippingQuotes({
         postalCodeDestination: String(postalCode),
         weightGrams,
-        dimensionsCm: DEFAULT_PACKAGE_DIMENSIONS_CM,
+        dimensionsCm,
         declaredValue: subtotal,
       })
       const quote = quotes.find(q => q.carrier === shippingCarrier)

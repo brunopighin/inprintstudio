@@ -5,6 +5,34 @@ import { requireAdmin, AuthRequest } from '../../middleware/auth'
 const router = Router()
 const prisma = new PrismaClient()
 
+const toIntOrNull = (v: unknown) => (v === '' || v === null || v === undefined) ? null : Number(v)
+
+interface VariantInput {
+  label: string
+  size?: string
+  paperType?: string
+  quantity?: number
+  price: number
+  stock?: number
+  weightGrams?: number
+  lengthCm?: number
+  widthCm?: number
+  heightCm?: number
+}
+
+const mapVariant = (v: VariantInput) => ({
+  label: v.label,
+  size: v.size || null,
+  paperType: v.paperType || null,
+  quantity: v.quantity ? Number(v.quantity) : null,
+  price: Number(v.price),
+  stock: Number(v.stock || 999),
+  weightGrams: toIntOrNull(v.weightGrams),
+  lengthCm: toIntOrNull(v.lengthCm),
+  widthCm: toIntOrNull(v.widthCm),
+  heightCm: toIntOrNull(v.heightCm),
+})
+
 router.get('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { search, category, active, page = '1', limit = '20' } = req.query
@@ -46,7 +74,7 @@ router.patch('/bulk-activate', requireAdmin, async (req: AuthRequest, res: Respo
 
 router.post('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, description, categoryId, subcategoryId, images, basePrice, featured, active, variants } = req.body
+    const { name, description, categoryId, subcategoryId, images, basePrice, weightGrams, lengthCm, widthCm, heightCm, featured, active, variants } = req.body
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now()
     const product = await prisma.product.create({
       data: {
@@ -54,18 +82,15 @@ router.post('/', requireAdmin, async (req: AuthRequest, res: Response) => {
         subcategoryId: subcategoryId || null,
         images: JSON.stringify(images || []),
         basePrice: Number(basePrice),
+        weightGrams: toIntOrNull(weightGrams),
+        lengthCm: toIntOrNull(lengthCm),
+        widthCm: toIntOrNull(widthCm),
+        heightCm: toIntOrNull(heightCm),
         slug,
         featured: Boolean(featured),
         active: active !== false,
         variants: variants?.length ? {
-          create: variants.map((v: { label: string; size?: string; paperType?: string; quantity?: number; price: number; stock?: number }) => ({
-            label: v.label,
-            size: v.size || null,
-            paperType: v.paperType || null,
-            quantity: v.quantity ? Number(v.quantity) : null,
-            price: Number(v.price),
-            stock: Number(v.stock || 999),
-          }))
+          create: variants.map(mapVariant)
         } : undefined,
       },
       include: { category: true, subcategory: true, variants: true },
@@ -92,7 +117,7 @@ router.get('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
 
 router.put('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, description, categoryId, subcategoryId, images, basePrice, featured, active, variants } = req.body
+    const { name, description, categoryId, subcategoryId, images, basePrice, weightGrams, lengthCm, widthCm, heightCm, featured, active, variants } = req.body
 
     await prisma.productVariant.deleteMany({ where: { productId: req.params.id } })
 
@@ -103,17 +128,14 @@ router.put('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
         subcategoryId: subcategoryId || null,
         images: JSON.stringify(images || []),
         basePrice: Number(basePrice),
+        weightGrams: toIntOrNull(weightGrams),
+        lengthCm: toIntOrNull(lengthCm),
+        widthCm: toIntOrNull(widthCm),
+        heightCm: toIntOrNull(heightCm),
         featured: Boolean(featured),
         active: Boolean(active),
         variants: variants?.length ? {
-          create: variants.map((v: { label: string; size?: string; paperType?: string; quantity?: number; price: number; stock?: number }) => ({
-            label: v.label,
-            size: v.size || null,
-            paperType: v.paperType || null,
-            quantity: v.quantity ? Number(v.quantity) : null,
-            price: Number(v.price),
-            stock: Number(v.stock || 999),
-          }))
+          create: variants.map(mapVariant)
         } : undefined,
       },
       include: { category: true, subcategory: true, variants: true },
