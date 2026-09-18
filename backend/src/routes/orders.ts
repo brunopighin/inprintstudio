@@ -194,7 +194,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       await prisma.order.update({ where: { id: order.id }, data: { mpPreferenceId: preference.id } })
       res.status(201).json({
         ...order,
-        checkoutUrl: preference.sandbox_init_point || preference.init_point,
+        checkoutUrl: preference.init_point || preference.sandbox_init_point,
       })
       return
     }
