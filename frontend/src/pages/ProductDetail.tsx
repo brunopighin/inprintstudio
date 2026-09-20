@@ -8,8 +8,6 @@ import { Product, ProductVariant } from '../types'
 import { useCart } from '../context/CartContext'
 
 const ASPECT_PRESETS: { label: string; value: number | undefined }[] = [
-  { label: 'Cuadrado', value: 1 },
-  { label: 'Horizontal', value: 3 / 2 },
   { label: 'Vertical', value: 2 / 3 },
   { label: 'Libre', value: undefined },
 ]
@@ -54,7 +52,7 @@ export default function ProductDetail() {
   const [added, setAdded] = useState(false)
 
   const [cropModalOpen, setCropModalOpen] = useState(false)
-  const [aspectPreset, setAspectPreset] = useState<number | undefined>(1)
+  const [aspectPreset, setAspectPreset] = useState<number | undefined>(2 / 3)
   const [crop, setCrop] = useState<Crop>()
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>()
   const imgRef = useRef<HTMLImageElement>(null)
@@ -72,7 +70,7 @@ export default function ProductDetail() {
 
   const openCropperFor = (src: string) => {
     setRawPhotoSrc(src)
-    setAspectPreset(1)
+    setAspectPreset(2 / 3)
     setCrop(undefined)
     setCompletedCrop(undefined)
     setCropModalOpen(true)
