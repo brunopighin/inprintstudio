@@ -40,6 +40,75 @@ const EMPTY_FORM: SettingsForm = {
   TRANSFER_BANK: '', TRANSFER_CBU: '', TRANSFER_ALIAS: '', TRANSFER_CUIT: '', TRANSFER_HOLDER: '', TRANSFER_NOTE: '',
 }
 
+const isAxiosError = (e: unknown): e is { response?: { data?: { error?: string } } } =>
+  typeof e === 'object' && e !== null && 'response' in e
+
+function ChangePasswordCard() {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  const handleSubmit = async () => {
+    setError('')
+    setSuccess(false)
+    if (newPassword.length < 6) {
+      setError('La nueva contraseña debe tener al menos 6 caracteres')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Las contraseñas no coinciden')
+      return
+    }
+    setSaving(true)
+    try {
+      await api.put('/auth/me', { currentPassword, newPassword })
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } catch (err) {
+      setError(isAxiosError(err) ? err.response?.data?.error || 'No se pudo cambiar la contraseña' : 'No se pudo cambiar la contraseña')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 p-6 space-y-4">
+      <div>
+        <h2 className="font-bold">Cambiar contraseña</h2>
+        <p className="text-xs text-gray-400 mt-1">Contraseña de acceso a este panel de administración.</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="label">Contraseña actual</label>
+          <input className="input-base" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />
+        </div>
+        <div />
+        <div>
+          <label className="label">Nueva contraseña</label>
+          <input className="input-base" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">Confirmar nueva contraseña</label>
+          <input className="input-base" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+        </div>
+      </div>
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+      <div className="flex items-center gap-3">
+        <button onClick={handleSubmit} disabled={saving || !currentPassword || !newPassword} className="btn-secondary disabled:opacity-50">
+          {saving ? 'Guardando...' : 'Cambiar contraseña'}
+        </button>
+        {success && <span className="text-sm text-green-700 flex items-center gap-1"><Check size={14} /> Contraseña actualizada</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminSettings() {
   const [form, setForm] = useState<SettingsForm>(EMPTY_FORM)
   const [passwordSet, setPasswordSet] = useState(false)
@@ -82,9 +151,6 @@ export default function AdminSettings() {
     }
   }
 
-  const isAxiosError = (e: unknown): e is { response?: { data?: { error?: string } } } =>
-    typeof e === 'object' && e !== null && 'response' in e
-
   const handleTestConnection = async () => {
     setTesting(true)
     setTestResult(null)
@@ -107,6 +173,8 @@ export default function AdminSettings() {
         <h1 className="text-2xl font-black">Configuración</h1>
         <p className="text-gray-500 text-sm mt-1">Envíos y medios de pago de la tienda.</p>
       </div>
+
+      <ChangePasswordCard />
 
       <div className="bg-white border border-gray-200 p-6 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
