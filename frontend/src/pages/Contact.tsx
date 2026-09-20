@@ -90,8 +90,8 @@ export default function Contact() {
             <div>
               <p className="font-semibold mb-4">Redes sociales</p>
               <div className="flex gap-3">
-                <a href="https://www.instagram.com/inprint.studio_/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 border border-gray-300 px-4 py-2.5 text-sm font-medium hover:bg-black hover:text-white hover:border-black transition-all">
-                  <Instagram size={16} />
+                <a href="https://www.instagram.com/inprint.studio_/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 border border-gray-300 px-4 py-2.5 text-sm font-medium hover:border-black transition-all">
+                  <Instagram size={16} className="text-pink-600" />
                   @inprint.studio_
                 </a>
               </div>
