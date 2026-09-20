@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Search, ChevronDown, ChevronUp, X, Truck, Download } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, Truck, Download } from 'lucide-react'
 import api from '../../services/api'
 import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, PROVINCE_NAMES } from '../../types'
 
@@ -49,12 +49,7 @@ const STATUSES: { key: string; label: string }[] = [
   { key: 'CANCELLED', label: 'Cancelados' },
 ]
 
-const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
-  RECEIVED: 'IN_PRODUCTION',
-  IN_PRODUCTION: 'READY',
-  READY: 'SHIPPED',
-  SHIPPED: 'DELIVERED',
-}
+const ORDER_STATUSES: OrderStatus[] = ['RECEIVED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED']
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -86,16 +81,10 @@ export default function AdminOrders() {
 
   const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); fetchOrders() }
 
-  const advanceStatus = async (order: Order) => {
-    const next = NEXT_STATUS[order.status as OrderStatus]
-    if (!next) return
-    await api.patch(`/admin/orders/${order.id}/status`, { status: next })
-    fetchOrders()
-  }
-
-  const cancelOrder = async (order: Order) => {
-    if (!confirm('¿Cancelar este pedido?')) return
-    await api.patch(`/admin/orders/${order.id}/status`, { status: 'CANCELLED' })
+  const changeStatus = async (order: Order, status: OrderStatus) => {
+    if (status === order.status) return
+    if (status === 'CANCELLED' && !confirm('¿Cancelar este pedido?')) return
+    await api.patch(`/admin/orders/${order.id}/status`, { status })
     fetchOrders()
   }
 
@@ -245,18 +234,15 @@ export default function AdminOrders() {
                       <td className="px-4 py-3 text-sm font-bold">${order.total.toLocaleString('es-AR')}</td>
                       <td className="px-4 py-3 text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString('es-AR')}</td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          {NEXT_STATUS[order.status as OrderStatus] && (
-                            <button onClick={() => advanceStatus(order)} className="text-xs bg-black text-white px-2.5 py-1.5 hover:bg-gray-800 transition-colors whitespace-nowrap">
-                              → {ORDER_STATUS_LABELS[NEXT_STATUS[order.status as OrderStatus]!]}
-                            </button>
-                          )}
-                          {order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && (
-                            <button onClick={() => cancelOrder(order)} className="text-xs border border-red-300 text-red-600 px-2.5 py-1.5 hover:bg-red-50 transition-colors">
-                              <X size={12} />
-                            </button>
-                          )}
-                        </div>
+                        <select
+                          value={order.status}
+                          onChange={e => changeStatus(order, e.target.value as OrderStatus)}
+                          className="text-xs border border-gray-300 px-2 py-1.5 bg-white hover:border-black transition-colors"
+                        >
+                          {ORDER_STATUSES.map(s => (
+                            <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>
+                          ))}
+                        </select>
                       </td>
                     </tr>
                     {expandedId === order.id && (
