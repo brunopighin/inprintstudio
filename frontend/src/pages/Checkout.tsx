@@ -289,7 +289,7 @@ export default function Checkout() {
                   <div className="space-y-3">
                     {[
                       { key: 'shipping' as const, icon: Truck, label: 'Envío a domicilio', desc: 'Elegís el correo y pagás el costo según tu código postal' },
-                      { key: 'pickup' as const, icon: Store, label: 'Retiro en local', desc: 'Gratis · Av. Ejemplo 1234, La Plata' },
+                      { key: 'pickup' as const, icon: Store, label: 'Retiro en local', desc: 'Gratis · Coordinamos el lugar y horario por WhatsApp' },
                     ].map(opt => (
                       <label key={opt.key} className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-colors ${form.shippingMethod === opt.key ? 'border-black' : 'border-gray-200 hover:border-gray-400'}`}>
                         <input type="radio" name="shipping" value={opt.key} checked={form.shippingMethod === opt.key} onChange={() => update('shippingMethod', opt.key)} className="sr-only" />

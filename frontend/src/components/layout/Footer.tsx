@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Mail, Instagram } from 'lucide-react'
+import { Mail, Instagram } from 'lucide-react'
 import logoWhite from '../../assets/logo-white.png'
 import WhatsAppIcon from '../icons/WhatsAppIcon'
 
@@ -55,10 +55,6 @@ export default function Footer() {
           <div>
             <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-5">Contacto</h4>
             <ul className="space-y-4">
-              <li className="flex items-start gap-3 text-sm text-gray-400">
-                <MapPin size={15} className="flex-shrink-0 mt-0.5" />
-                <span>Av. Ejemplo 1234<br />La Plata, Buenos Aires</span>
-              </li>
               <li className="flex items-center gap-3 text-sm text-gray-400">
                 <WhatsAppIcon size={15} />
                 <a href="https://wa.me/5492323618591" className="hover:text-white transition-colors">+54 9 2323 61-8591</a>
@@ -68,11 +64,6 @@ export default function Footer() {
                 <a href="mailto:info@inprint.com.ar" className="hover:text-white transition-colors">info@inprint.com.ar</a>
               </li>
             </ul>
-            <div className="mt-6 p-4 border border-gray-800">
-              <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Horario de atención</p>
-              <p className="text-sm text-gray-300">Lun–Vie: 9:00 a 18:00</p>
-              <p className="text-sm text-gray-300">Sáb: 9:00 a 13:00</p>
-            </div>
           </div>
         </div>
       </div>

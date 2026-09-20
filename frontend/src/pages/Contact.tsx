@@ -1,4 +1,4 @@
-import { MapPin, Mail, Instagram, Clock } from 'lucide-react'
+import { Mail, Instagram } from 'lucide-react'
 import WhatsAppIcon from '../components/icons/WhatsAppIcon'
 
 export default function Contact() {
@@ -62,16 +62,6 @@ export default function Contact() {
               <div className="space-y-5">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-black flex items-center justify-center flex-shrink-0">
-                    <MapPin size={16} className="text-white" />
-                  </div>
-                  <div>
-                    <p className="font-semibold">Local</p>
-                    <p className="text-gray-500 text-sm mt-1">Av. Ejemplo 1234<br />La Plata, Buenos Aires, Argentina</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-black flex items-center justify-center flex-shrink-0">
                     <WhatsAppIcon size={16} className="text-white" />
                   </div>
                   <div>
@@ -93,20 +83,6 @@ export default function Contact() {
                     </a>
                   </div>
                 </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-black flex items-center justify-center flex-shrink-0">
-                    <Clock size={16} className="text-white" />
-                  </div>
-                  <div>
-                    <p className="font-semibold">Horarios</p>
-                    <div className="text-gray-500 text-sm mt-1 space-y-0.5">
-                      <p>Lunes a Viernes: 9:00 a 18:00</p>
-                      <p>Sábados: 9:00 a 13:00</p>
-                      <p>Domingos: Cerrado</p>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -118,14 +94,6 @@ export default function Contact() {
                   <Instagram size={16} />
                   @inprint.studio_
                 </a>
-              </div>
-            </div>
-
-            {/* Map placeholder */}
-            <div className="h-48 bg-gray-100 border border-gray-200 flex items-center justify-center">
-              <div className="text-center text-gray-400">
-                <MapPin size={24} className="mx-auto mb-2" />
-                <p className="text-sm">Mapa — Av. Ejemplo 1234, La Plata</p>
               </div>
             </div>
           </div>
