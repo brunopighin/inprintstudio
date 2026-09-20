@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Phone, Mail, Instagram, Facebook } from 'lucide-react'
+import { MapPin, Phone, Mail, Instagram } from 'lucide-react'
 import logoWhite from '../../assets/logo-white.png'
 
 export default function Footer() {
@@ -20,9 +20,6 @@ export default function Footer() {
               <div className="flex gap-3">
                 <a href="https://www.instagram.com/inprint.studio_/" target="_blank" rel="noopener noreferrer" className="w-9 h-9 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white hover:border-white transition-colors">
                   <Instagram size={16} />
-                </a>
-                <a href="#" className="w-9 h-9 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white hover:border-white transition-colors">
-                  <Facebook size={16} />
                 </a>
               </div>
             </div>

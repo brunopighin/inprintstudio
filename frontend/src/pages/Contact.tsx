@@ -1,4 +1,4 @@
-import { MapPin, Mail, Instagram, Facebook, Clock, MessageCircle } from 'lucide-react'
+import { MapPin, Mail, Instagram, Clock, MessageCircle } from 'lucide-react'
 
 export default function Contact() {
   return (
@@ -116,10 +116,6 @@ export default function Contact() {
                 <a href="https://www.instagram.com/inprint.studio_/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 border border-gray-300 px-4 py-2.5 text-sm font-medium hover:bg-black hover:text-white hover:border-black transition-all">
                   <Instagram size={16} />
                   @inprint.studio_
-                </a>
-                <a href="#" className="flex items-center gap-2 border border-gray-300 px-4 py-2.5 text-sm font-medium hover:bg-black hover:text-white hover:border-black transition-all">
-                  <Facebook size={16} />
-                  In Print
                 </a>
               </div>
             </div>
