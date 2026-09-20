@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Phone, Mail, Instagram } from 'lucide-react'
+import { MapPin, Mail, Instagram } from 'lucide-react'
 import logoWhite from '../../assets/logo-white.png'
+import WhatsAppIcon from '../icons/WhatsAppIcon'
 
 export default function Footer() {
   return (
@@ -59,8 +60,8 @@ export default function Footer() {
                 <span>Av. Ejemplo 1234<br />La Plata, Buenos Aires</span>
               </li>
               <li className="flex items-center gap-3 text-sm text-gray-400">
-                <Phone size={15} />
-                <a href="https://wa.me/5492211234567" className="hover:text-white transition-colors">+54 9 221 123-4567</a>
+                <WhatsAppIcon size={15} />
+                <a href="https://wa.me/5492323618591" className="hover:text-white transition-colors">+54 9 2323 61-8591</a>
               </li>
               <li className="flex items-center gap-3 text-sm text-gray-400">
                 <Mail size={15} />

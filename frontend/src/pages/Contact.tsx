@@ -1,4 +1,5 @@
-import { MapPin, Mail, Instagram, Clock, MessageCircle } from 'lucide-react'
+import { MapPin, Mail, Instagram, Clock } from 'lucide-react'
+import WhatsAppIcon from '../components/icons/WhatsAppIcon'
 
 export default function Contact() {
   return (
@@ -71,12 +72,12 @@ export default function Contact() {
 
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-black flex items-center justify-center flex-shrink-0">
-                    <MessageCircle size={16} className="text-white" />
+                    <WhatsAppIcon size={16} className="text-white" />
                   </div>
                   <div>
                     <p className="font-semibold">WhatsApp</p>
-                    <a href="https://wa.me/5492211234567" className="text-gray-500 text-sm mt-1 hover:text-black transition-colors block">
-                      +54 9 221 123-4567
+                    <a href="https://wa.me/5492323618591" className="text-gray-500 text-sm mt-1 hover:text-black transition-colors block">
+                      +54 9 2323 61-8591
                     </a>
                   </div>
                 </div>
