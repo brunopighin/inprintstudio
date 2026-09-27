@@ -5,6 +5,9 @@ import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
 import { CARRIER_LABELS, ShippingQuote, Agency, PROVINCES, PaymentMethodConfig, TransferInfo } from '../types'
 import api from '../services/api'
+import WhatsAppIcon from '../components/icons/WhatsAppIcon'
+import { WHATSAPP_NUMBER, formatWhatsApp, whatsappLink } from '../config'
+import { isValidArgentinePhone } from '../utils/phone'
 
 type Step = 'contact' | 'shipping' | 'payment' | 'confirm'
 type ShippingMethod = 'pickup' | 'shipping'
@@ -74,6 +77,12 @@ export default function Checkout() {
   const [branchCode, setBranchCode] = useState('')
   const [branchFilter, setBranchFilter] = useState('')
 
+  // Si el comprador escribió la localidad o la provincia a mano, no se le
+  // pisan con lo que diga el CP.
+  const [localityTouched, setLocalityTouched] = useState(false)
+  const [provinceTouched, setProvinceTouched] = useState(false)
+  const [autofilled, setAutofilled] = useState(false)
+
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>([])
   const [transferInfo, setTransferInfo] = useState<TransferInfo | null>(null)
 
@@ -98,6 +107,29 @@ export default function Checkout() {
     setSelectedOption(null)
     setQuoteError('')
   }, [form.postalCode])
+
+  // Localidad y provincia salen del código postal. Se espera un momento para no
+  // pegarle al backend en cada tecla, y si el CP no está en la tabla no se toca
+  // nada: el comprador los completa a mano como siempre.
+  useEffect(() => {
+    const cp = form.postalCode.trim()
+    if (!/^\d{4}$/.test(cp) || (localityTouched && provinceTouched)) { setAutofilled(false); return }
+    let cancelled = false
+    const timer = setTimeout(() => {
+      api.get(`/orders/locality?postalCode=${cp}`)
+        .then(({ data }) => {
+          if (cancelled) return
+          setForm(f => ({
+            ...f,
+            locality: localityTouched ? f.locality : data.locality,
+            province: provinceTouched ? f.province : data.province,
+          }))
+          setAutofilled(true)
+        })
+        .catch(() => { if (!cancelled) setAutofilled(false) })
+    }, 400)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [form.postalCode, localityTouched, provinceTouched])
 
   useEffect(() => {
     api.get('/payments/methods').then(({ data }) => {
@@ -143,9 +175,15 @@ export default function Checkout() {
   const paymentAdjustment = selectedMethod ? Math.round(baseTotal * (selectedMethod.adjustmentPercent / 100) * 100) / 100 : 0
   const grandTotal = baseTotal + paymentAdjustment
   const shippingErrors = getShippingErrors(form)
+  const transferWhatsApp = transferInfo?.whatsapp?.trim() || WHATSAPP_NUMBER
 
-  const fetchQuotes = async () => {
-    if (Object.keys(shippingErrors).length > 0) {
+  const fetchQuotes = async ({ auto = false } = {}) => {
+    // El precio depende del código postal y del carrito, nada más, así que
+    // cotizando solo alcanza con el CP: las opciones aparecen mientras el
+    // comprador sigue completando la dirección. A mano sí se exige todo.
+    if (auto) {
+      if (!/^\d{4}$/.test(form.postalCode.trim())) return
+    } else if (Object.keys(shippingErrors).length > 0) {
       setShippingAttempted(true)
       return
     }
@@ -158,12 +196,26 @@ export default function Checkout() {
       const { data } = await api.post('/orders/shipping-quote', { postalCode: form.postalCode, items: orderItems })
       if (!data.length) setQuoteError('No encontramos opciones de envío para ese código postal.')
       setQuotes(data)
+      // Si Correo cotiza una sola modalidad para ese CP no hay nada que elegir.
+      if (data.length === 1) setSelectedOption(quoteKey(data[0]))
     } catch {
       setQuoteError('No pudimos cotizar el envío. Probá de nuevo en unos minutos.')
     } finally {
       setQuoting(false)
     }
   }
+
+  // Las opciones de domicilio y sucursal aparecen solas en cuanto hay un CP
+  // válido: antes quedaban escondidas detrás del botón "Cotizar envío" y el
+  // comprador no llegaba a elegir.
+  const cartKey = items.map(i => `${i.product.id}:${i.variant?.id ?? ''}:${i.quantity}`).join('|')
+  useEffect(() => {
+    if (form.shippingMethod !== 'shipping') return
+    if (!/^\d{4}$/.test(form.postalCode.trim())) return
+    const timer = setTimeout(() => { fetchQuotes({ auto: true }) }, 600)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.shippingMethod, form.postalCode, cartKey])
 
   const shippingIncomplete = form.shippingMethod === 'shipping' && (!selectedQuote || (needsBranch && !branchCode))
 
@@ -258,8 +310,19 @@ export default function Checkout() {
               {transferInfo.alias && <p>Alias: {transferInfo.alias}</p>}
               {transferInfo.cuit && <p>CUIT/CUIL: {transferInfo.cuit}</p>}
               {transferInfo.holder && <p>Titular: {transferInfo.holder}</p>}
-              <p className="mt-3 text-xs text-gray-400">{transferInfo.note || 'Enviá el comprobante al WhatsApp o email y confirmamos tu pedido.'}</p>
+              <p className="mt-3 text-xs text-gray-400">{transferInfo.note || 'Enviá el comprobante al WhatsApp y confirmamos tu pedido.'}</p>
             </div>
+            {transferWhatsApp && (
+              <a
+                href={whatsappLink(transferWhatsApp, `Hola! Te envío el comprobante de la transferencia del pedido ${orderNumber}.`)}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 w-full flex items-center justify-center gap-2 bg-black text-white py-3 font-semibold text-sm hover:bg-gray-800 transition-colors"
+              >
+                <WhatsAppIcon size={16} />
+                Enviar comprobante al {formatWhatsApp(transferWhatsApp)}
+              </a>
+            )}
           </div>
         )}
         <div className="flex gap-3 justify-center">
@@ -316,11 +379,14 @@ export default function Checkout() {
                     </div>
                     <div>
                       <label className="label">Teléfono / WhatsApp *</label>
-                      <input className="input-base" value={form.customerPhone} onChange={e => update('customerPhone', e.target.value)} placeholder="+54 9 221 ..." />
+                      <input className="input-base" value={form.customerPhone} onChange={e => update('customerPhone', e.target.value)} placeholder="Ej: 221 412-3456" />
+                      {form.customerPhone.trim() && !isValidArgentinePhone(form.customerPhone) && (
+                        <p className="text-red-600 text-xs mt-1">Ingresá un teléfono válido: código de área y número, sin el 0 ni el 15. Ej: 221 412-3456</p>
+                      )}
                     </div>
                     <button
                       onClick={() => setStep('shipping')}
-                      disabled={!form.customerName || !isValidEmail(form.customerEmail) || !form.customerPhone.trim()}
+                      disabled={!form.customerName.trim() || !isValidEmail(form.customerEmail) || !isValidArgentinePhone(form.customerPhone)}
                       className="btn-primary w-full mt-2"
                     >
                       Continuar
@@ -337,7 +403,7 @@ export default function Checkout() {
                   <h2 className="font-bold text-xl mb-6">Método de entrega</h2>
                   <div className="space-y-3">
                     {[
-                      { key: 'shipping' as const, icon: Truck, label: 'Envío a domicilio', desc: 'Elegís el correo y pagás el costo según tu código postal' },
+                      { key: 'shipping' as const, icon: Truck, label: 'Envío por correo', desc: 'A tu domicilio o a una sucursal de Correo Argentino: elegís abajo' },
                       { key: 'pickup' as const, icon: Store, label: 'Retiro en local', desc: 'Gratis · Coordinamos el lugar y horario por WhatsApp' },
                     ].map(opt => (
                       <label key={opt.key} className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-colors ${form.shippingMethod === opt.key ? 'border-black' : 'border-gray-200 hover:border-gray-400'}`}>
@@ -360,15 +426,21 @@ export default function Checkout() {
                           <input className="input-base" value={form.shippingAddress} onChange={e => update('shippingAddress', e.target.value)} placeholder="Calle, número, piso, depto" />
                           {shippingAttempted && shippingErrors.shippingAddress && <p className="text-red-600 text-xs mt-1">{shippingErrors.shippingAddress}</p>}
                         </div>
+                        <div>
+                          <label className="label">Código postal *</label>
+                          <input className="input-base max-w-[180px]" value={form.postalCode} onChange={e => update('postalCode', e.target.value)} placeholder="Ej: 1900" />
+                          {autofilled && <p className="text-xs text-gray-400 mt-1">Completamos localidad y provincia según el código postal. Si no coincide, corregilas.</p>}
+                          {shippingAttempted && shippingErrors.postalCode && <p className="text-red-600 text-xs mt-1">{shippingErrors.postalCode}</p>}
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="label">Localidad *</label>
-                            <input className="input-base" value={form.locality} onChange={e => update('locality', e.target.value)} placeholder="Ej: La Plata" />
+                            <input className="input-base" value={form.locality} onChange={e => { setLocalityTouched(true); update('locality', e.target.value) }} placeholder="Ej: La Plata" />
                             {shippingAttempted && shippingErrors.locality && <p className="text-red-600 text-xs mt-1">{shippingErrors.locality}</p>}
                           </div>
                           <div>
                             <label className="label">Provincia *</label>
-                            <select className="input-base" value={form.province} onChange={e => update('province', e.target.value)}>
+                            <select className="input-base" value={form.province} onChange={e => { setProvinceTouched(true); update('province', e.target.value) }}>
                               <option value="">Seleccioná una provincia</option>
                               {PROVINCES.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
                             </select>
@@ -376,22 +448,18 @@ export default function Checkout() {
                           </div>
                         </div>
                         <div>
-                          <label className="label">Código postal *</label>
-                          <input className="input-base max-w-[180px]" value={form.postalCode} onChange={e => update('postalCode', e.target.value)} placeholder="Ej: 1900" />
-                          {shippingAttempted && shippingErrors.postalCode && <p className="text-red-600 text-xs mt-1">{shippingErrors.postalCode}</p>}
-                        </div>
-                        <div>
                           <label className="label">Referencia de entrega (opcional)</label>
                           <input className="input-base" value={form.deliveryReference} onChange={e => update('deliveryReference', e.target.value)} placeholder="Entre calles, color de puerta, horario, etc." />
                         </div>
 
                         <div>
-                          <button type="button" onClick={fetchQuotes} disabled={quoting} className="btn-secondary w-full sm:w-auto disabled:opacity-50">
-                            {quoting ? 'Cotizando envío…' : 'Cotizar envío'}
+                          <button type="button" onClick={() => fetchQuotes()} disabled={quoting} className="btn-secondary w-full sm:w-auto disabled:opacity-50">
+                            {quoting ? 'Cotizando envío…' : quotes.length > 0 ? 'Volver a cotizar' : 'Cotizar envío'}
                           </button>
                           {quoteError && <p className="text-red-600 text-xs mt-2">{quoteError}</p>}
                           {quotes.length > 0 && (
                             <div className="mt-3 space-y-2">
+                              <p className="label mb-1">¿Cómo querés recibirlo? *</p>
                               {quotes.map(q => (
                                 <label key={quoteKey(q)} className={`flex items-center gap-3 p-3 border-2 cursor-pointer transition-colors ${selectedOption === quoteKey(q) ? 'border-black' : 'border-gray-200 hover:border-gray-400'}`}>
                                   <input type="radio" name="shippingOption" className="sr-only" checked={selectedOption === quoteKey(q)} onChange={() => setSelectedOption(quoteKey(q))} />

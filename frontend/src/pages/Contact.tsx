@@ -1,5 +1,6 @@
 import { Mail, Instagram } from 'lucide-react'
 import WhatsAppIcon from '../components/icons/WhatsAppIcon'
+import { WHATSAPP_NUMBER, formatWhatsApp, whatsappLink } from '../config'
 
 export default function Contact() {
   return (
@@ -66,8 +67,8 @@ export default function Contact() {
                   </div>
                   <div>
                     <p className="font-semibold">WhatsApp</p>
-                    <a href="https://wa.me/5492323618591" className="text-gray-500 text-sm mt-1 hover:text-black transition-colors block">
-                      +54 9 2323 61-8591
+                    <a href={whatsappLink(WHATSAPP_NUMBER)} className="text-gray-500 text-sm mt-1 hover:text-black transition-colors block">
+                      {formatWhatsApp(WHATSAPP_NUMBER)}
                     </a>
                   </div>
                 </div>

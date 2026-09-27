@@ -16,6 +16,7 @@ export interface TransferInfo {
   cuit: string
   holder: string
   note: string
+  whatsapp: string
 }
 
 const LABELS: Record<PaymentMethodKey, string> = {
@@ -65,6 +66,7 @@ export async function getPaymentMethod(key: string): Promise<PaymentMethodConfig
 export async function getTransferInfo(): Promise<TransferInfo> {
   const s = await getSettings([
     'TRANSFER_BANK', 'TRANSFER_CBU', 'TRANSFER_ALIAS', 'TRANSFER_CUIT', 'TRANSFER_HOLDER', 'TRANSFER_NOTE',
+    'TRANSFER_WHATSAPP',
   ])
   return {
     bank: s.TRANSFER_BANK || '',
@@ -73,6 +75,9 @@ export async function getTransferInfo(): Promise<TransferInfo> {
     cuit: s.TRANSFER_CUIT || '',
     holder: s.TRANSFER_HOLDER || '',
     note: s.TRANSFER_NOTE || '',
+    // A donde manda el comprobante. Si está vacío, el checkout cae al número
+    // de contacto del sitio.
+    whatsapp: s.TRANSFER_WHATSAPP || '',
   }
 }
 

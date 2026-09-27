@@ -6,6 +6,8 @@ import { Carrier, CARRIER_LABELS, computeOrderPhysicals } from '../utils/shippin
 import { getShippingQuotes } from '../utils/shippingProviders'
 import { getAgencies, toProvinceCode, isConfigured as isCorreoArgentinoConfigured } from '../utils/shippingProviders/correoArgentino'
 import { getPaymentMethod, calcAdjustment } from '../utils/paymentMethods'
+import { isValidArgentinePhone } from '../utils/phone'
+import postalCodes from '../data/postalCodes.json'
 
 const router = Router()
 const prisma = new PrismaClient()
@@ -116,6 +118,16 @@ router.post('/shipping-quote', async (req, res: Response) => {
   }
 })
 
+// Localidad y provincia a partir del código postal, para no hacérselas tipear.
+// La tabla sale de las sucursales de Correo (ver scripts/buildPostalCodes.ts),
+// así que cubre los CP con sucursal: el resto los completa el comprador a mano.
+router.get('/locality', (req, res: Response) => {
+  const cp = /(\d{4})/.exec(String(req.query.postalCode || ''))?.[1]
+  const found = cp ? (postalCodes as Record<string, string[]>)[cp] : undefined
+  if (!found) { res.status(404).json({ error: 'No tenemos la localidad de ese código postal' }); return }
+  res.json({ postalCode: cp, locality: found[0], province: found[1] })
+})
+
 // Las sucursales también se listan en /admin/orders/agencies, pero esa pide
 // token de admin y acá las necesita el comprador para elegir dónde retirar.
 router.get('/agencies', async (req, res: Response) => {
@@ -145,6 +157,13 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     if (!EMAIL_RE.test(String(customerEmail).trim())) {
       res.status(400).json({ error: 'Email inválido' })
+      return
+    }
+
+    // El teléfono es con el que se lo contacta y el que va a Correo al generar
+    // el envío, así que se valida acá también: el checkout se puede saltear.
+    if (customerPhone && !isValidArgentinePhone(String(customerPhone))) {
+      res.status(400).json({ error: 'Ingresá un teléfono válido: código de área y número, sin el 0 ni el 15' })
       return
     }
 

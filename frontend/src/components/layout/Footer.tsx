@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Mail, Instagram } from 'lucide-react'
 import logoWhite from '../../assets/logo-white.png'
 import WhatsAppIcon from '../icons/WhatsAppIcon'
+import { WHATSAPP_NUMBER, formatWhatsApp, whatsappLink } from '../../config'
 
 export default function Footer() {
   return (
@@ -57,7 +58,7 @@ export default function Footer() {
             <ul className="space-y-4">
               <li className="flex items-center gap-3 text-sm text-gray-400">
                 <WhatsAppIcon size={15} />
-                <a href="https://wa.me/5492323618591" className="hover:text-white transition-colors">+54 9 2323 61-8591</a>
+                <a href={whatsappLink(WHATSAPP_NUMBER)} className="hover:text-white transition-colors">{formatWhatsApp(WHATSAPP_NUMBER)}</a>
               </li>
               <li className="flex items-center gap-3 text-sm text-gray-400">
                 <Mail size={15} />

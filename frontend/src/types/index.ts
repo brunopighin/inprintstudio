@@ -142,6 +142,7 @@ export interface TransferInfo {
   cuit: string
   holder: string
   note: string
+  whatsapp: string
 }
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {

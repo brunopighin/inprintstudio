@@ -28,6 +28,7 @@ interface SettingsForm {
   TRANSFER_CUIT: string
   TRANSFER_HOLDER: string
   TRANSFER_NOTE: string
+  TRANSFER_WHATSAPP: string
 }
 
 const EMPTY_FORM: SettingsForm = {
@@ -38,6 +39,7 @@ const EMPTY_FORM: SettingsForm = {
   MERCADOPAGO_ENABLED: 'true', MERCADOPAGO_ADJUSTMENT_PERCENT: '0',
   TRANSFER_ENABLED: 'true', TRANSFER_ADJUSTMENT_PERCENT: '0',
   TRANSFER_BANK: '', TRANSFER_CBU: '', TRANSFER_ALIAS: '', TRANSFER_CUIT: '', TRANSFER_HOLDER: '', TRANSFER_NOTE: '',
+  TRANSFER_WHATSAPP: '',
 }
 
 const isAxiosError = (e: unknown): e is { response?: { data?: { error?: string } } } =>
@@ -326,6 +328,11 @@ export default function AdminSettings() {
               <label className="label">CUIT / CUIL</label>
               <input className="input-base" value={form.TRANSFER_CUIT} onChange={e => update('TRANSFER_CUIT', e.target.value)} />
             </div>
+          </div>
+          <div>
+            <label className="label">WhatsApp para comprobantes</label>
+            <input className="input-base" value={form.TRANSFER_WHATSAPP} onChange={e => update('TRANSFER_WHATSAPP', e.target.value)} placeholder="Ej: 5492323618591" />
+            <p className="text-xs text-gray-400 mt-1">Aparece al finalizar la compra, con un botón que abre el chat y el número de pedido ya escrito. Si lo dejás vacío se usa el número de contacto del sitio.</p>
           </div>
           <div>
             <label className="label">Nota para el cliente (opcional)</label>
