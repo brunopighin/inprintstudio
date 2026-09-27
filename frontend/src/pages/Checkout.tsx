@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Check, Truck, Store, CreditCard, ArrowLeft } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
-import { Carrier, CARRIER_LABELS, ShippingQuote, PROVINCES, PaymentMethodConfig, TransferInfo } from '../types'
+import { CARRIER_LABELS, ShippingQuote, Agency, PROVINCES, PaymentMethodConfig, TransferInfo } from '../types'
 import api from '../services/api'
 
 type Step = 'contact' | 'shipping' | 'payment' | 'confirm'
@@ -13,6 +13,16 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const isValidEmail = (email: string) => EMAIL_RE.test(email.trim())
 
 const formatPrice = (n: number) => `$${n.toLocaleString('es-AR')}`
+
+// El mismo correo ofrece dos modalidades, así que la opción elegida se
+// identifica por la combinación de las dos.
+const quoteKey = (q: ShippingQuote) => `${q.carrier}:${q.deliveryType}`
+
+// Correo devuelve más de 1300 sucursales en Buenos Aires, así que la lista se
+// filtra en vez de volcarse entera en el select. Se ignoran acentos porque los
+// nombres vienen sin ellos ("CIUDAD AUTONOMA") y el comprador los escribe.
+const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+const BRANCH_LIMIT = 200
 
 interface CheckoutForm {
   customerName: string
@@ -56,7 +66,13 @@ export default function Checkout() {
   const [quotes, setQuotes] = useState<ShippingQuote[]>([])
   const [quoting, setQuoting] = useState(false)
   const [quoteError, setQuoteError] = useState('')
-  const [selectedCarrier, setSelectedCarrier] = useState<Carrier | null>(null)
+  const [selectedOption, setSelectedOption] = useState<string | null>(null)
+
+  const [agencies, setAgencies] = useState<Agency[]>([])
+  const [agenciesLoading, setAgenciesLoading] = useState(false)
+  const [agenciesError, setAgenciesError] = useState('')
+  const [branchCode, setBranchCode] = useState('')
+  const [branchFilter, setBranchFilter] = useState('')
 
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>([])
   const [transferInfo, setTransferInfo] = useState<TransferInfo | null>(null)
@@ -79,7 +95,7 @@ export default function Checkout() {
 
   useEffect(() => {
     setQuotes([])
-    setSelectedCarrier(null)
+    setSelectedOption(null)
     setQuoteError('')
   }, [form.postalCode])
 
@@ -96,7 +112,31 @@ export default function Checkout() {
   }, [])
 
   const discount = 0
-  const selectedQuote = quotes.find(q => q.carrier === selectedCarrier) || null
+  const selectedQuote = quotes.find(q => quoteKey(q) === selectedOption) || null
+  const needsBranch = selectedQuote?.deliveryType === 'S'
+  const selectedBranch = agencies.find(a => a.code === branchCode) || null
+  const filteredAgencies = branchFilter.trim()
+    ? agencies.filter(a => normalize(`${a.name} ${a.city} ${a.address} ${a.postalCode}`).includes(normalize(branchFilter)))
+    : agencies
+
+  useEffect(() => {
+    setBranchCode('')
+    setAgenciesError('')
+    if (!needsBranch || !form.province) { setAgencies([]); return }
+    let cancelled = false
+    setAgenciesLoading(true)
+    api.get(`/orders/agencies?province=${form.province}`)
+      .then(({ data }) => {
+        if (cancelled) return
+        setAgencies(data)
+        // Arranca filtrado por la localidad que ya cargó, que es donde va a
+        // buscar sucursal el 90% de las veces.
+        setBranchFilter(form.locality.trim())
+      })
+      .catch(() => { if (!cancelled) { setAgencies([]); setAgenciesError('No pudimos cargar las sucursales. Probá de nuevo en unos minutos.') } })
+      .finally(() => { if (!cancelled) setAgenciesLoading(false) })
+    return () => { cancelled = true }
+  }, [needsBranch, form.province])
   const shippingCost = form.shippingMethod === 'shipping' ? (selectedQuote?.price ?? 0) : 0
   const baseTotal = total - discount + shippingCost
   const selectedMethod = paymentMethods.find(m => m.key === form.paymentMethod)
@@ -112,7 +152,7 @@ export default function Checkout() {
     setQuoting(true)
     setQuoteError('')
     setQuotes([])
-    setSelectedCarrier(null)
+    setSelectedOption(null)
     try {
       const orderItems = items.map(i => ({ productId: i.product.id, variantId: i.variant?.id, quantity: i.quantity }))
       const { data } = await api.post('/orders/shipping-quote', { postalCode: form.postalCode, items: orderItems })
@@ -125,16 +165,18 @@ export default function Checkout() {
     }
   }
 
+  const shippingIncomplete = form.shippingMethod === 'shipping' && (!selectedQuote || (needsBranch && !branchCode))
+
   const handleContinueShipping = () => {
     setShippingAttempted(true)
     if (Object.keys(shippingErrors).length > 0) return
-    if (form.shippingMethod === 'shipping' && !selectedCarrier) return
+    if (shippingIncomplete) return
     setStep('payment')
   }
 
   const handleSubmit = async () => {
     if (loading) return
-    if (Object.keys(shippingErrors).length > 0 || (form.shippingMethod === 'shipping' && !selectedCarrier)) {
+    if (Object.keys(shippingErrors).length > 0 || shippingIncomplete) {
       setShippingAttempted(true)
       setStep('shipping')
       return
@@ -151,7 +193,9 @@ export default function Checkout() {
       }))
       const { data } = await api.post('/orders', {
         ...form,
-        shippingCarrier: form.shippingMethod === 'shipping' ? selectedCarrier : undefined,
+        shippingCarrier: form.shippingMethod === 'shipping' ? selectedQuote?.carrier : undefined,
+        shippingDeliveryType: form.shippingMethod === 'shipping' ? selectedQuote?.deliveryType : undefined,
+        shippingBranchCode: needsBranch ? branchCode : undefined,
         items: orderItems,
       })
 
@@ -196,8 +240,13 @@ export default function Checkout() {
         </div>
         {form.shippingMethod === 'shipping' && (
           <div className="bg-gray-50 border border-gray-200 p-5 mb-8 text-left text-sm text-gray-600">
-            <p className="font-bold mb-1 text-black">Envío por {selectedCarrier ? CARRIER_LABELS[selectedCarrier] : ''}</p>
-            <p>Te vamos a avisar por email cuando el pedido esté en camino.</p>
+            <p className="font-bold mb-1 text-black">
+              {selectedQuote ? `${CARRIER_LABELS[selectedQuote.carrier]} — ${selectedQuote.label}` : 'Envío'}
+            </p>
+            {selectedQuote?.deliveryType === 'S' && selectedBranch && (
+              <p className="mb-1">Retirás en: <strong>{selectedBranch.name}</strong>{selectedBranch.address ? `, ${selectedBranch.address}` : ''}{selectedBranch.city ? `, ${selectedBranch.city}` : ''}</p>
+            )}
+            <p>Te vamos a avisar por email cuando el pedido esté {selectedQuote?.deliveryType === 'S' ? 'listo para retirar' : 'en camino'}.</p>
           </div>
         )}
         {form.paymentMethod === 'transfer' && transferInfo && (
@@ -344,10 +393,11 @@ export default function Checkout() {
                           {quotes.length > 0 && (
                             <div className="mt-3 space-y-2">
                               {quotes.map(q => (
-                                <label key={q.carrier} className={`flex items-center gap-3 p-3 border-2 cursor-pointer transition-colors ${selectedCarrier === q.carrier ? 'border-black' : 'border-gray-200 hover:border-gray-400'}`}>
-                                  <input type="radio" name="carrier" className="sr-only" checked={selectedCarrier === q.carrier} onChange={() => setSelectedCarrier(q.carrier)} />
+                                <label key={quoteKey(q)} className={`flex items-center gap-3 p-3 border-2 cursor-pointer transition-colors ${selectedOption === quoteKey(q) ? 'border-black' : 'border-gray-200 hover:border-gray-400'}`}>
+                                  <input type="radio" name="shippingOption" className="sr-only" checked={selectedOption === quoteKey(q)} onChange={() => setSelectedOption(quoteKey(q))} />
                                   <div className="flex-1">
                                     <p className="text-sm font-semibold">{CARRIER_LABELS[q.carrier]} — {q.label}</p>
+                                    {q.deliveryType === 'S' && <p className="text-xs text-gray-500">Retirás el pedido en la sucursal que elijas</p>}
                                     {(q.etaDaysMin || q.etaDaysMax) && (
                                       <p className="text-xs text-gray-500">
                                         Entrega estimada: {q.etaDaysMin && q.etaDaysMax && q.etaDaysMin !== q.etaDaysMax
@@ -359,6 +409,50 @@ export default function Checkout() {
                                   <span className="font-bold text-sm">{formatPrice(q.price)}</span>
                                 </label>
                               ))}
+                            </div>
+                          )}
+
+                          {needsBranch && (
+                            <div className="mt-4">
+                              <label className="label">Sucursal donde retirás *</label>
+                              {agenciesLoading ? (
+                                <p className="text-sm text-gray-400">Buscando sucursales…</p>
+                              ) : agenciesError ? (
+                                <p className="text-red-600 text-xs">{agenciesError}</p>
+                              ) : agencies.length === 0 ? (
+                                <p className="text-sm text-gray-500">No encontramos sucursales en esa provincia. Elegí envío a domicilio.</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <input
+                                    className="input-base py-2 text-sm"
+                                    value={branchFilter}
+                                    onChange={e => setBranchFilter(e.target.value)}
+                                    placeholder="Filtrar por localidad, nombre o código postal"
+                                  />
+                                  {filteredAgencies.length === 0 ? (
+                                    <p className="text-sm text-gray-500">Ninguna sucursal coincide con «{branchFilter}». Borrá el filtro para ver todas.</p>
+                                  ) : (
+                                    <>
+                                      <select className="input-base" value={branchCode} onChange={e => setBranchCode(e.target.value)}>
+                                        <option value="">Seleccioná una sucursal</option>
+                                        {filteredAgencies.slice(0, BRANCH_LIMIT).map(a => (
+                                          <option key={a.code} value={a.code}>
+                                            {a.name}{a.city ? ` — ${a.city}` : ''}{a.address ? ` (${a.address})` : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <p className="text-xs text-gray-400">
+                                        {filteredAgencies.length > BRANCH_LIMIT
+                                          ? `Mostrando ${BRANCH_LIMIT} de ${filteredAgencies.length} sucursales. Afiná el filtro para ver el resto.`
+                                          : `${filteredAgencies.length} ${filteredAgencies.length === 1 ? 'sucursal' : 'sucursales'}`}
+                                      </p>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                              {shippingAttempted && !branchCode && filteredAgencies.length > 0 && (
+                                <p className="text-red-600 text-xs mt-1">Elegí la sucursal donde querés retirar el pedido</p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -373,7 +467,7 @@ export default function Checkout() {
 
                   <button
                     onClick={handleContinueShipping}
-                    disabled={form.shippingMethod === 'shipping' && !selectedCarrier}
+                    disabled={shippingIncomplete}
                     className="btn-primary w-full mt-6 disabled:opacity-50"
                   >
                     Continuar

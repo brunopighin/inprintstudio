@@ -91,6 +91,11 @@ async function getQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
 
   return [{
     carrier: 'oca',
+    // OCA no cotiza modalidad por tarifa: la define la Operativa configurada
+    // (puerta a puerta o puerta a sucursal). Se declara 'D' porque la operativa
+    // cargada es puerta a puerta; si se habilita una a sucursal hay que
+    // reflejarlo acá, sobre todo para que el checkout pida la sucursal.
+    deliveryType: 'D',
     label: 'OCA',
     price: total,
     etaDaysMin: plazoEntrega,

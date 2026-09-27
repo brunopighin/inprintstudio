@@ -4,6 +4,7 @@ import { optionalAuth, authenticate, AuthRequest } from '../middleware/auth'
 import { preferenceClient } from '../utils/mercadopago'
 import { Carrier, CARRIER_LABELS, computeOrderPhysicals } from '../utils/shipping'
 import { getShippingQuotes } from '../utils/shippingProviders'
+import { getAgencies, toProvinceCode, isConfigured as isCorreoArgentinoConfigured } from '../utils/shippingProviders/correoArgentino'
 import { getPaymentMethod, calcAdjustment } from '../utils/paymentMethods'
 
 const router = Router()
@@ -11,6 +12,7 @@ const prisma = new PrismaClient()
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SHIPPING_METHODS = ['pickup', 'shipping'] as const
+const DELIVERY_TYPES = ['D', 'S'] as const
 
 function generateOrderNumber() {
   const date = new Date()
@@ -114,11 +116,26 @@ router.post('/shipping-quote', async (req, res: Response) => {
   }
 })
 
+// Las sucursales también se listan en /admin/orders/agencies, pero esa pide
+// token de admin y acá las necesita el comprador para elegir dónde retirar.
+router.get('/agencies', async (req, res: Response) => {
+  try {
+    if (!(await isCorreoArgentinoConfigured())) { res.status(400).json({ error: 'No hay sucursales disponibles' }); return }
+    const province = toProvinceCode(String(req.query.province || ''))
+    if (!province) { res.status(400).json({ error: 'Provincia inválida' }); return }
+    res.json(await getAgencies(province))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'No pudimos obtener las sucursales. Probá de nuevo en unos minutos.' })
+  }
+})
+
 router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const {
       customerName, customerEmail, customerPhone, items, shippingMethod, shippingCarrier, paymentMethod,
       shippingAddress, locality, province, postalCode, deliveryReference, notes,
+      shippingDeliveryType, shippingBranchCode,
     } = req.body
 
     if (!customerName || !customerEmail || !items?.length) {
@@ -141,6 +158,16 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         res.status(400).json({ error: 'Faltan datos de entrega para el envío' })
         return
       }
+      if (!DELIVERY_TYPES.includes(shippingDeliveryType)) {
+        res.status(400).json({ error: 'Elegí si el envío es a domicilio o a sucursal' })
+        return
+      }
+      // Sin sucursal elegida el envío no se puede generar después, y el pedido
+      // quedaría cobrado como sucursal pero sin destino.
+      if (shippingDeliveryType === 'S' && !String(shippingBranchCode || '').trim()) {
+        res.status(400).json({ error: 'Elegí la sucursal donde querés retirar el pedido' })
+        return
+      }
     }
 
     const paymentMethodConfig = await getPaymentMethod(paymentMethod)
@@ -161,7 +188,9 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         dimensionsCm,
         declaredValue: subtotal,
       })
-      const quote = quotes.find(q => q.carrier === shippingCarrier)
+      // Se cobra la modalidad que eligió el comprador, no la primera que
+      // devuelva el correo: entre domicilio y sucursal hay casi un 30%.
+      const quote = quotes.find(q => q.carrier === shippingCarrier && q.deliveryType === shippingDeliveryType)
       if (!quote) {
         res.status(400).json({ error: 'La cotización de envío ya no está disponible, volvé a cotizar' })
         return
@@ -170,7 +199,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       if (SHIPPING_COST > 0) {
         preferenceItems.push({
           id: 'shipping',
-          title: `Envío (${CARRIER_LABELS[shippingCarrier as Carrier] || shippingCarrier})`,
+          title: `Envío — ${CARRIER_LABELS[shippingCarrier as Carrier] || shippingCarrier} ${quote.label}`,
           quantity: 1,
           unit_price: SHIPPING_COST,
           currency_id: 'ARS',
@@ -197,6 +226,11 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         total,
         shippingMethod,
         shippingCarrier: shippingMethod === 'shipping' ? shippingCarrier : null,
+        // La generación del envío deriva la modalidad de este campo
+        // (routes/admin/orders.ts): con sucursal cargada va como 'S'.
+        shippingBranchCode: shippingMethod === 'shipping' && shippingDeliveryType === 'S'
+          ? String(shippingBranchCode).trim()
+          : null,
         paymentMethod,
         shippingAddress: shippingAddress || null,
         locality: locality || null,

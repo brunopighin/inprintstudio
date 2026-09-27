@@ -108,12 +108,24 @@ export const PROVINCES: { code: string; name: string }[] = [
 
 export const PROVINCE_NAMES: Record<string, string> = Object.fromEntries(PROVINCES.map(p => [p.code, p.name]))
 
+// 'D' = a domicilio, 'S' = a sucursal.
+export type DeliveryType = 'D' | 'S'
+
 export interface ShippingQuote {
   carrier: Carrier
+  deliveryType: DeliveryType
   label: string
   price: number
   etaDaysMin?: number
   etaDaysMax?: number
+}
+
+export interface Agency {
+  code: string
+  name: string
+  address: string
+  city: string
+  postalCode: string
 }
 
 export interface PaymentMethodConfig {

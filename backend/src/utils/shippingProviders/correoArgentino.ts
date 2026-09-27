@@ -1,4 +1,4 @@
-import { ShippingProvider, QuoteInput, ShippingQuote } from './types'
+import { ShippingProvider, QuoteInput, ShippingQuote, DeliveryType } from './types'
 import { getSetting, getSettings } from '../settings'
 
 // Integración real contra la API "MiCorreo" de Correo Argentino, verificada
@@ -132,22 +132,31 @@ async function getQuotes(input: QuoteInput): Promise<ShippingQuote[]> {
   if (!res.ok) throw new Error(`MiCorreo rates error: ${res.status}`)
 
   const data = await res.json() as {
-    rates: { deliveredType: string; productName: string; price: number; deliveryTimeMin: string; deliveryTimeMax: string }[]
+    rates: { deliveredType: string; productType: string; productName: string; price: number; deliveryTimeMin: string; deliveryTimeMax: string }[]
   }
 
-  // Se prioriza la entrega a domicilio ("D"); si Correo solo cotiza a sucursal
-  // ("S") para ese código postal, se muestra esa opción igual.
-  const domicilio = data.rates.find(r => r.deliveredType === 'D')
-  const rate = domicilio || data.rates[0]
-  if (!rate) return []
+  // Correo devuelve cuatro tarifas para el mismo bulto: Clásico ("CP") y
+  // Expreso ("EP"), cada una a domicilio ("D") y a sucursal ("S"). Se ofrecen
+  // las dos del Clásico y no se ofrece el Expreso: es lo que definió el
+  // comercio. Se filtra por productType además de deliveredType porque antes se
+  // tomaba el primer "D" del array sin mirarlo, y bastaba con que Correo
+  // cambiara el orden de la respuesta para cobrar Expreso sin que se note.
+  const clasico = data.rates.filter(r => r.productType === 'CP')
+  const modalidades: { rate?: typeof clasico[number]; deliveryType: DeliveryType; label: string }[] = [
+    { rate: clasico.find(r => r.deliveredType === 'D'), deliveryType: 'D', label: 'Clásico a domicilio' },
+    { rate: clasico.find(r => r.deliveredType === 'S'), deliveryType: 'S', label: 'Clásico a sucursal' },
+  ]
 
-  return [{
-    carrier: 'correo_argentino',
-    label: rate.deliveredType === 'S' ? `${rate.productName} (a sucursal)` : rate.productName,
+  // Correo no cotiza las dos modalidades para todos los códigos postales, así
+  // que se devuelve lo que haya: puede venir una sola.
+  return modalidades.flatMap(({ rate, deliveryType, label }) => rate ? [{
+    carrier: 'correo_argentino' as const,
+    deliveryType,
+    label,
     price: rate.price,
     etaDaysMin: Number(rate.deliveryTimeMin) || undefined,
     etaDaysMax: Number(rate.deliveryTimeMax) || undefined,
-  }]
+  }] : [])
 }
 
 export const correoArgentinoProvider: ShippingProvider = {
