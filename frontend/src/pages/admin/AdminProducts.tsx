@@ -21,6 +21,21 @@ const emptyVariant = (): VariantInput => ({
   weightGrams: '', lengthCm: '', widthCm: '', heightCm: '',
 })
 
+// Mismo criterio que valida el backend: sin peso y medidas no se puede cotizar
+// el envío, y vale cargarlo en el producto o en todas sus variantes.
+interface PackageData {
+  weightGrams?: string | number | null
+  lengthCm?: string | number | null
+  widthCm?: string | number | null
+  heightCm?: string | number | null
+}
+
+const hasPackageData = (v: PackageData) =>
+  [v.weightGrams, v.lengthCm, v.widthCm, v.heightCm].every(n => Number(n) > 0)
+
+const packageIncomplete = (p: Product) =>
+  !hasPackageData(p) && !(p.variants.length && p.variants.every(hasPackageData))
+
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -35,6 +50,8 @@ export default function AdminProducts() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [formError, setFormError] = useState('')
+  const [missingPackageData, setMissingPackageData] = useState(0)
 
   const [form, setForm] = useState({
     name: '', description: '', categoryId: '', subcategoryId: '',
@@ -51,6 +68,7 @@ export default function AdminProducts() {
     const { data } = await api.get(`/admin/products?${params}`)
     setProducts(data.products)
     setTotal(data.total)
+    setMissingPackageData(data.missingPackageData ?? 0)
     setLoading(false)
   }
 
@@ -105,6 +123,12 @@ export default function AdminProducts() {
   }
 
   const handleSave = async () => {
+    const usableVariants = variants.filter(v => v.label && v.price)
+    if (!hasPackageData(form) && !(usableVariants.length && usableVariants.every(hasPackageData))) {
+      setFormError('Cargá peso y medidas del paquete para poder cotizar el envío. Si cada variante tiene un tamaño distinto, completalas en todas las variantes.')
+      return
+    }
+    setFormError('')
     setSaving(true)
     try {
       const images = form.images.split('\n').map(s => s.trim()).filter(Boolean)
@@ -112,7 +136,7 @@ export default function AdminProducts() {
         ...form,
         images,
         basePrice: Number(form.basePrice),
-        variants: variants.filter(v => v.label && v.price).map(v => ({
+        variants: usableVariants.map(v => ({
           label: v.label, size: v.size || null, paperType: v.paperType || null,
           quantity: v.quantity ? Number(v.quantity) : null,
           price: Number(v.price), stock: Number(v.stock || 999),
@@ -155,7 +179,7 @@ export default function AdminProducts() {
   }
 
   const toggleActive = async (p: Product) => {
-    await api.put(`/admin/products/${p.id}`, { ...p, active: !p.active, images: JSON.parse(p.images || '[]') })
+    await api.patch(`/admin/products/${p.id}/active`, { active: !p.active })
     fetch()
   }
 
@@ -197,6 +221,14 @@ export default function AdminProducts() {
         </button>
       </form>
 
+      {missingPackageData > 0 && (
+        <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3">
+          <strong>{missingPackageData}</strong> {missingPackageData === 1 ? 'producto no tiene' : 'productos no tienen'} peso ni medidas cargados.
+          El envío de esos productos se cotiza con un paquete por defecto, así que el precio que ve el comprador no es el real.
+          Editalos y completá <em>Peso y medidas del paquete</em>.
+        </div>
+      )}
+
       <div className="bg-white border border-gray-200 overflow-hidden">
         {loading ? <div className="p-8 text-center text-gray-400">Cargando...</div> : (
           <div className="overflow-x-auto">
@@ -225,6 +257,9 @@ export default function AdminProducts() {
                             <p className="text-sm font-semibold flex items-center gap-1">
                               {p.name}
                               {p.featured && <Star size={10} className="text-yellow-500 fill-yellow-500" />}
+                              {packageIncomplete(p) && (
+                                <span className="badge bg-amber-100 text-amber-700 ml-1" title="Sin peso ni medidas: el envío se cotiza con un paquete por defecto">sin peso</span>
+                              )}
                             </p>
                             <p className="text-xs text-gray-400 font-mono">{p.slug}</p>
                           </div>
@@ -303,8 +338,8 @@ export default function AdminProducts() {
                 <input className="input-base" type="number" value={form.basePrice} onChange={e => setForm(f => ({ ...f, basePrice: e.target.value }))} />
               </div>
               <div>
-                <label className="label mb-2">Peso y medidas del paquete</label>
-                <p className="text-xs text-gray-400 -mt-1 mb-2">Se usan para cotizar y generar el envío. Si el producto tiene variantes de distinto tamaño, cargalas ahí en vez de acá.</p>
+                <label className="label mb-2">Peso y medidas del paquete *</label>
+                <p className="text-xs text-gray-400 -mt-1 mb-2">Obligatorios: sin estos datos no se puede cotizar el envío y el comprador ve un precio que no es el real. Si el producto tiene variantes de distinto tamaño, cargalas ahí en vez de acá.</p>
                 <div className="grid grid-cols-4 gap-2">
                   <input className="input-base py-2 text-sm" type="number" placeholder="Peso (g)" value={form.weightGrams} onChange={e => setForm(f => ({ ...f, weightGrams: e.target.value }))} />
                   <input className="input-base py-2 text-sm" type="number" placeholder="Largo (cm)" value={form.lengthCm} onChange={e => setForm(f => ({ ...f, lengthCm: e.target.value }))} />
@@ -385,6 +420,10 @@ export default function AdminProducts() {
                   ))}
                 </div>
               </div>
+
+              {formError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2">{formError}</p>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">

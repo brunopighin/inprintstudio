@@ -33,6 +33,31 @@ const mapVariant = (v: VariantInput) => ({
   heightCm: toIntOrNull(v.heightCm),
 })
 
+// Sin peso ni medidas no hay cotización real posible: computeOrderPhysicals cae
+// a un paquete por defecto y el comprador ve un precio de envío que no tiene
+// relación con lo que Correo va a cobrar. El dato lo carga el cliente desde el
+// admin, así que se exige al guardar en vez de confiar en que se acuerde.
+const PACKAGE_REQUIRED = 'Cargá peso y medidas del paquete para poder cotizar el envío. Si cada variante tiene un tamaño distinto, completalas en todas las variantes.'
+
+interface PackageData {
+  weightGrams?: unknown
+  lengthCm?: unknown
+  widthCm?: unknown
+  heightCm?: unknown
+}
+
+const hasPackageData = (v: PackageData) =>
+  [v.weightGrams, v.lengthCm, v.widthCm, v.heightCm].every(n => Number(n) > 0)
+
+// Vale cargarlo en el producto o en todas sus variantes, porque al cotizar la
+// variante pisa al producto (ver resolveItems en routes/orders.ts).
+function packageError(body: PackageData & { variants?: VariantInput[] }): string | null {
+  if (hasPackageData(body)) return null
+  const variants = (body.variants || []).filter(v => v.label && v.price)
+  if (variants.length && variants.every(hasPackageData)) return null
+  return PACKAGE_REQUIRED
+}
+
 router.get('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { search, category, active, page = '1', limit = '20' } = req.query
@@ -52,7 +77,20 @@ router.get('/', requireAdmin, async (req: AuthRequest, res: Response) => {
       }),
       prisma.product.count({ where }),
     ])
-    res.json({ products, total })
+
+    // Cuántos productos del catálogo no pueden cotizar envío todavía, para que
+    // el admin lo vea sin tener que abrirlos uno por uno.
+    const all = await prisma.product.findMany({
+      select: {
+        weightGrams: true, lengthCm: true, widthCm: true, heightCm: true,
+        variants: { select: { weightGrams: true, lengthCm: true, widthCm: true, heightCm: true } },
+      },
+    })
+    const missingPackageData = all.filter(p =>
+      !hasPackageData(p) && !(p.variants.length && p.variants.every(hasPackageData))
+    ).length
+
+    res.json({ products, total, missingPackageData })
   } catch {
     res.status(500).json({ error: 'Error al obtener productos' })
   }
@@ -75,6 +113,10 @@ router.patch('/bulk-activate', requireAdmin, async (req: AuthRequest, res: Respo
 router.post('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { name, description, categoryId, subcategoryId, images, basePrice, weightGrams, lengthCm, widthCm, heightCm, featured, active, variants } = req.body
+
+    const packageProblem = packageError(req.body)
+    if (packageProblem) { res.status(400).json({ error: packageProblem }); return }
+
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now()
     const product = await prisma.product.create({
       data: {
@@ -115,9 +157,28 @@ router.get('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Mostrar/ocultar no pasa por la validación del paquete: es un cambio de
+// visibilidad y no tiene por qué exigir completar peso y medidas. Antes el
+// frontend lo hacía con un PUT del producto entero, que ahora sí valida.
+router.patch('/:id/active', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const product = await prisma.product.update({
+      where: { id: req.params.id },
+      data: { active: Boolean(req.body.active) },
+      include: { category: true, subcategory: true, variants: true },
+    })
+    res.json(product)
+  } catch {
+    res.status(500).json({ error: 'Error al cambiar la visibilidad del producto' })
+  }
+})
+
 router.put('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { name, description, categoryId, subcategoryId, images, basePrice, weightGrams, lengthCm, widthCm, heightCm, featured, active, variants } = req.body
+
+    const packageProblem = packageError(req.body)
+    if (packageProblem) { res.status(400).json({ error: packageProblem }); return }
 
     await prisma.productVariant.deleteMany({ where: { productId: req.params.id } })
 
