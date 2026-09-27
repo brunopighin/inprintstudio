@@ -114,6 +114,32 @@ router.patch('/:id/branch', requireAdmin, async (req: AuthRequest, res: Response
   }
 })
 
+// Eliminar es para pedidos de prueba o basura. Para sacar un pedido real de los
+// números del dashboard NO hace falta borrarlo: el dashboard ya excluye los
+// cancelados. Un pedido pagado exige cancelarlo primero, para que el paso de
+// borrar un cobro real sea deliberado y no un clic de más.
+router.delete('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, status: true, paymentStatus: true },
+    })
+    if (!order) { res.status(404).json({ error: 'Pedido no encontrado' }); return }
+
+    if (order.paymentStatus === 'APPROVED' && order.status !== 'CANCELLED') {
+      res.status(400).json({ error: 'Este pedido está pagado. Cancelalo primero y después eliminalo.' })
+      return
+    }
+
+    // Los items se van solos: OrderItem tiene onDelete Cascade.
+    await prisma.order.delete({ where: { id: order.id } })
+    res.json({ message: 'Pedido eliminado' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Error al eliminar el pedido' })
+  }
+})
+
 router.post('/:id/generate-shipment', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const order = await prisma.order.findUnique({

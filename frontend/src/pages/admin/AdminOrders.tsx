@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Search, ChevronDown, ChevronUp, Truck, Download } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, Truck, Download, Trash2 } from 'lucide-react'
 import api from '../../services/api'
 import { Order, ORDER_STATUS_LABELS, OrderStatus, Carrier, CARRIER_LABELS, CARRIER_TRACKING_URLS, PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, PROVINCE_NAMES } from '../../types'
 
@@ -65,6 +65,7 @@ export default function AdminOrders() {
   const [loadingAgenciesFor, setLoadingAgenciesFor] = useState<string | null>(null)
   const [savingBranch, setSavingBranch] = useState<string | null>(null)
   const [generatingShipment, setGeneratingShipment] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -80,6 +81,26 @@ export default function AdminOrders() {
   useEffect(() => { fetchOrders() }, [statusFilter, page])
 
   const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); fetchOrders() }
+
+  const deleteOrder = async (order: Order) => {
+    const msg = `¿Eliminar el pedido ${order.orderNumber} de ${order.customerName} por $${order.total.toLocaleString('es-AR')}?
+
+`
+      + 'Se borra junto con sus items y no se puede recuperar. '
+      + 'Si solo querés que no cuente en las estadísticas, cancelalo en vez de eliminarlo.'
+    if (!confirm(msg)) return
+    setDeleting(order.id)
+    try {
+      await api.delete(`/admin/orders/${order.id}`)
+      if (expandedId === order.id) setExpandedId(null)
+      await fetchOrders()
+    } catch (err) {
+      const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error
+      alert(message || 'No pudimos eliminar el pedido')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const changeStatus = async (order: Order, status: OrderStatus) => {
     if (status === order.status) return
@@ -198,6 +219,7 @@ export default function AdminOrders() {
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Total</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Fecha</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Acciones</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 w-8" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -244,10 +266,20 @@ export default function AdminOrders() {
                           ))}
                         </select>
                       </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => deleteOrder(order)}
+                          disabled={deleting === order.id}
+                          title="Eliminar pedido"
+                          className="p-1.5 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-40"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                     {expandedId === order.id && (
                       <tr key={`${order.id}-expanded`}>
-                        <td colSpan={7} className="bg-gray-50 border-b border-gray-200">
+                        <td colSpan={8} className="bg-gray-50 border-b border-gray-200">
                           <div className="px-8 py-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                               <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Productos</p>
