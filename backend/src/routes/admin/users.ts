@@ -46,4 +46,31 @@ router.get('/:id/orders', requireAdmin, async (req: AuthRequest, res: Response) 
   }
 })
 
+// Los pedidos NO se borran con el cliente: Order.userId es opcional, así que la
+// relación los deja en null y quedan como pedidos sin cuenta, con el nombre, el
+// email y el teléfono que ya tienen guardados. Es a propósito: se va la cuenta,
+// no el historial de ventas.
+router.delete('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, role: true, _count: { select: { orders: true } } },
+    })
+    if (!user) { res.status(404).json({ error: 'Cliente no encontrado' }); return }
+
+    // Esta pantalla lista solo clientes, pero la ruta se puede llamar con
+    // cualquier id: sin esto se podría borrar la cuenta de admin del comercio.
+    if (user.role === 'ADMIN') {
+      res.status(400).json({ error: 'No se puede eliminar una cuenta de administrador desde acá' })
+      return
+    }
+
+    await prisma.user.delete({ where: { id: user.id } })
+    res.json({ message: 'Cliente eliminado', ordersKept: user._count.orders })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Error al eliminar el cliente' })
+  }
+})
+
 export { router as adminUserRoutes }

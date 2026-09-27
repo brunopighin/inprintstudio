@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import api from '../../services/api'
 import { Order, ORDER_STATUS_LABELS, OrderStatus } from '../../types'
 
@@ -20,6 +20,7 @@ export default function AdminUsers() {
   const [page, setPage] = useState(1)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [userOrders, setUserOrders] = useState<Record<string, Order[]>>({})
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -32,6 +33,29 @@ export default function AdminUsers() {
   }
 
   useEffect(() => { fetchUsers() }, [page])
+
+  const deleteUser = async (user: AdminUser) => {
+    const pedidos = user._count.orders
+    const msg = `¿Eliminar la cuenta de ${user.name} (${user.email})?
+
+`
+      + (pedidos > 0
+        ? `Sus ${pedidos} pedido${pedidos !== 1 ? 's' : ''} se conservan, pero quedan sin cuenta asociada. `
+        : '')
+      + 'La cuenta no se puede recuperar: para volver a comprar tendría que registrarse de nuevo.'
+    if (!confirm(msg)) return
+    setDeleting(user.id)
+    try {
+      await api.delete(`/admin/users/${user.id}`)
+      if (expandedId === user.id) setExpandedId(null)
+      await fetchUsers()
+    } catch (err) {
+      const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error
+      alert(message || 'No pudimos eliminar el cliente')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const toggleExpand = async (id: string) => {
     if (expandedId === id) { setExpandedId(null); return }
@@ -80,6 +104,14 @@ export default function AdminUsers() {
                   </div>
                   <button onClick={() => toggleExpand(user.id)} className="p-2 text-gray-400 hover:text-black transition-colors">
                     {expandedId === user.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  <button
+                    onClick={() => deleteUser(user)}
+                    disabled={deleting === user.id}
+                    title="Eliminar cliente"
+                    className="p-2 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-40"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </div>
 
