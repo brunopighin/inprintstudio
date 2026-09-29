@@ -51,6 +51,8 @@ export default function AdminProducts() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [uploadProgress, setUploadProgress] = useState('')
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const [formError, setFormError] = useState('')
   const [missingPackageData, setMissingPackageData] = useState(0)
 
@@ -161,13 +163,14 @@ export default function AdminProducts() {
   }
 
   // La primera imagen es la portada que se ve en el catálogo
-  const moveImage = (idx: number, delta: number) => {
-    const target = idx + delta
-    if (target < 0 || target >= imageList.length) return
+  const moveImageTo = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= imageList.length) return
     const next = [...imageList]
-    ;[next[idx], next[target]] = [next[target], next[idx]]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
     setForm(f => ({ ...f, images: next.join('\n') }))
   }
+  const moveImage = (idx: number, delta: number) => moveImageTo(idx, idx + delta)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -368,8 +371,17 @@ export default function AdminProducts() {
                 {imageList.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {imageList.map((url, idx) => (
-                      <div key={`${idx}-${url}`} className="relative w-20 h-20 bg-gray-100 border border-gray-200 overflow-hidden">
-                        <img src={url} alt="" className="w-full h-full object-cover" />
+                      <div
+                        key={`${idx}-${url}`}
+                        draggable
+                        onDragStart={e => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move' }}
+                        onDragOver={e => { e.preventDefault(); setDragOverIdx(idx) }}
+                        onDragLeave={() => setDragOverIdx(i => (i === idx ? null : i))}
+                        onDrop={e => { e.preventDefault(); if (dragIdx !== null) moveImageTo(dragIdx, idx); setDragIdx(null); setDragOverIdx(null) }}
+                        onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
+                        className={`relative w-24 h-24 bg-gray-100 border-2 overflow-hidden cursor-move transition-all ${dragOverIdx === idx && dragIdx !== idx ? 'border-black scale-105' : 'border-gray-200'} ${dragIdx === idx ? 'opacity-40' : ''}`}
+                      >
+                        <img src={url} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false} />
                         {idx === 0 && (
                           <span className="absolute top-0 left-0 bg-black text-white text-[10px] px-1 leading-4">Portada</span>
                         )}
@@ -388,18 +400,18 @@ export default function AdminProducts() {
                               aria-label="Mover a la izquierda"
                               onClick={() => moveImage(idx, -1)}
                               disabled={idx === 0}
-                              className="bg-black/70 text-white p-0.5 disabled:invisible"
+                              className="bg-black/70 text-white p-1 hover:bg-black disabled:invisible"
                             >
-                              <ChevronLeft size={12} />
+                              <ChevronLeft size={16} />
                             </button>
                             <button
                               type="button"
                               aria-label="Mover a la derecha"
                               onClick={() => moveImage(idx, 1)}
                               disabled={idx === imageList.length - 1}
-                              className="bg-black/70 text-white p-0.5 disabled:invisible"
+                              className="bg-black/70 text-white p-1 hover:bg-black disabled:invisible"
                             >
-                              <ChevronRight size={12} />
+                              <ChevronRight size={16} />
                             </button>
                           </div>
                         )}
@@ -412,7 +424,7 @@ export default function AdminProducts() {
                   {uploading ? `Subiendo${uploadProgress ? ` ${uploadProgress}` : ''}...` : 'Subir imágenes'}
                   <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} disabled={uploading} />
                 </label>
-                <p className="text-xs text-gray-400 mt-1">Podés elegir varias fotos a la vez. La primera es la portada del catálogo; usá las flechas para cambiar el orden.</p>
+                <p className="text-xs text-gray-400 mt-1">Podés elegir varias fotos a la vez. La primera es la portada del catálogo. Para cambiar el orden, arrastrá las fotos o usá las flechas.</p>
                 {uploadError && <p className="text-red-600 text-xs mt-2">{uploadError}</p>}
                 <textarea
                   className="input-base resize-none font-mono text-xs mt-3"
