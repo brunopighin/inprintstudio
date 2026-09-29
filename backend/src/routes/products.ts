@@ -21,7 +21,7 @@ router.get('/', async (req: Request, res: Response) => {
         include: {
           category: true,
           subcategory: true,
-          variants: { orderBy: { price: 'asc' } },
+          variants: { orderBy: [{ price: 'asc' }, { createdAt: 'asc' }] },
         },
         skip,
         take: Number(limit),
@@ -43,7 +43,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       include: {
         category: true,
         subcategory: true,
-        variants: { orderBy: { price: 'asc' } },
+        variants: { orderBy: [{ price: 'asc' }, { createdAt: 'asc' }] },
       },
     })
     if (!product || !product.active) {
