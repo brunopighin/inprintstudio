@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ShoppingBag, Upload, ChevronLeft, ChevronRight, Check, Crop as CropIcon } from 'lucide-react'
+import { ShoppingBag, Upload, Check, Crop as CropIcon } from 'lucide-react'
 import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import api from '../services/api'
 import { Product, ProductVariant } from '../types'
 import { useCart } from '../context/CartContext'
+import ImageSlider from '../components/product/ImageSlider'
 
 const ASPECT_PRESETS: { label: string; value: number | undefined }[] = [
   { label: 'Vertical', value: 2 / 3 },
@@ -154,28 +155,22 @@ export default function ProductDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 xl:gap-20">
           {/* Gallery */}
           <div className="space-y-4">
-            <div className="relative aspect-square bg-gray-100 overflow-hidden group">
-              <img
-                src={photoPreview || displayImages[currentImg]}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
-              {photoPreview && (
-                <div className="absolute top-3 left-3 bg-black text-white text-xs px-2 py-1">
-                  Vista previa de tu foto
-                </div>
-              )}
-              {displayImages.length > 1 && (
+            <div className="relative aspect-square bg-gray-100 overflow-hidden">
+              {photoPreview ? (
                 <>
-                  <button onClick={() => setCurrentImg(i => (i - 1 + displayImages.length) % displayImages.length)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/80 flex items-center justify-center hover:bg-white transition-colors opacity-0 group-hover:opacity-100">
-                    <ChevronLeft size={18} />
-                  </button>
-                  <button onClick={() => setCurrentImg(i => (i + 1) % displayImages.length)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/80 flex items-center justify-center hover:bg-white transition-colors opacity-0 group-hover:opacity-100">
-                    <ChevronRight size={18} />
-                  </button>
+                  <img src={photoPreview} alt={product.name} className="w-full h-full object-cover" />
+                  <div className="absolute top-3 left-3 bg-black text-white text-xs px-2 py-1">
+                    Vista previa de tu foto
+                  </div>
                 </>
+              ) : (
+                <ImageSlider
+                  images={displayImages}
+                  alt={product.name}
+                  index={currentImg}
+                  onIndexChange={setCurrentImg}
+                  arrowsOnMobile
+                />
               )}
             </div>
 

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { ShoppingBag } from 'lucide-react'
 import { Product } from '../../types'
 import { useCart } from '../../context/CartContext'
+import ImageSlider from './ImageSlider'
 
 interface Props {
   product: Product
@@ -9,8 +10,8 @@ interface Props {
 
 export default function ProductCard({ product }: Props) {
   const { addItem } = useCart()
-  const images = JSON.parse(product.images || '[]')
-  const imageUrl = images[0] || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80'
+  const images: string[] = JSON.parse(product.images || '[]')
+  const displayImages = images.length > 0 ? images : ['https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80']
   const minPrice = product.variants.length
     ? Math.min(...product.variants.map(v => v.price))
     : product.basePrice
@@ -20,12 +21,7 @@ export default function ProductCard({ product }: Props) {
     <div className="card group">
       <Link to={`/producto/${product.slug}`}>
         <div className="img-zoom aspect-square bg-gray-100">
-          <img
-            src={imageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
+          <ImageSlider images={displayImages} alt={product.name} />
         </div>
       </Link>
 
