@@ -33,6 +33,17 @@ interface PackageData {
 const hasPackageData = (v: PackageData) =>
   [v.weightGrams, v.lengthCm, v.widthCm, v.heightCm].every(n => Number(n) > 0)
 
+const money = (n: number) => `$${n.toLocaleString('es-AR')}`
+
+// Con variantes el precio real es el de cada una, no el base
+const priceLabel = (p: Product) => {
+  if (!p.variants.length) return money(p.basePrice)
+  const prices = p.variants.map(v => v.price)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  return min === max ? money(min) : `${money(min)} – ${money(max)}`
+}
+
 const packageIncomplete = (p: Product) =>
   !hasPackageData(p) && !(p.variants.length && p.variants.every(hasPackageData))
 
@@ -126,7 +137,20 @@ export default function AdminProducts() {
   }
 
   const handleSave = async () => {
-    const usableVariants = variants.filter(v => v.label && v.price)
+    // Una variante a medio cargar no se descarta en silencio: antes, borrar el precio y guardar eliminaba la variante
+    const usableVariants = variants.filter(v => v.label.trim() || v.price.trim())
+    if (usableVariants.some(v => !v.label.trim())) {
+      setFormError('Cada variante necesita un nombre (ej: 10x15 cm).')
+      return
+    }
+    if (usableVariants.some(v => v.price.trim() === '' || Number(v.price) < 0)) {
+      setFormError('Cargá el precio de cada variante (puede ser 0).')
+      return
+    }
+    if (!usableVariants.length && form.basePrice.trim() === '') {
+      setFormError('Cargá el precio del producto.')
+      return
+    }
     if (!hasPackageData(form) && !(usableVariants.length && usableVariants.every(hasPackageData))) {
       setFormError('Cargá peso y medidas del paquete para poder cotizar el envío. Si cada variante tiene un tamaño distinto, completalas en todas las variantes.')
       return
@@ -138,9 +162,10 @@ export default function AdminProducts() {
       const payload = {
         ...form,
         images,
-        basePrice: Number(form.basePrice),
+        // Con variantes, el precio base no se muestra: se guarda el más barato para que "Desde $…" sea coherente
+        basePrice: usableVariants.length ? Math.min(...usableVariants.map(v => Number(v.price))) : Number(form.basePrice),
         variants: usableVariants.map(v => ({
-          label: v.label, size: v.size || null, paperType: v.paperType || null,
+          label: v.label.trim(), size: v.size || null, paperType: v.paperType || null,
           quantity: v.quantity ? Number(v.quantity) : null,
           price: Number(v.price), stock: Number(v.stock || 999),
           weightGrams: v.weightGrams || null, lengthCm: v.lengthCm || null,
@@ -151,12 +176,18 @@ export default function AdminProducts() {
       else await api.post('/admin/products', payload)
       setModalOpen(false)
       fetch()
+    } catch (err: unknown) {
+      setFormError((err as { response?: { data?: { error?: string } } }).response?.data?.error || 'No se pudo guardar el producto')
     } finally {
       setSaving(false)
     }
   }
 
   const imageList = form.images.split('\n').map(s => s.trim()).filter(Boolean)
+  const hasVariantsInForm = variants.some(v => v.label.trim() || v.price.trim())
+
+  const setVariant = (i: number, field: keyof VariantInput, value: string) =>
+    setVariants(vv => vv.map((x, idx) => (idx === i ? { ...x, [field]: value } : x)))
 
   const removeImage = (idx: number) => {
     setForm(f => ({ ...f, images: imageList.filter((_, i) => i !== idx).join('\n') }))
@@ -285,7 +316,7 @@ export default function AdminProducts() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{p.category?.name}</td>
-                      <td className="px-4 py-3 text-sm font-bold">${p.basePrice.toLocaleString('es-AR')}</td>
+                      <td className="px-4 py-3 text-sm font-bold">{priceLabel(p)}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{p.variants.length}</td>
                       <td className="px-4 py-3">
                         <span className={`badge ${p.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -353,8 +384,14 @@ export default function AdminProducts() {
                 </div>
               </div>
               <div>
-                <label className="label">Precio base *</label>
-                <input className="input-base" type="number" value={form.basePrice} onChange={e => setForm(f => ({ ...f, basePrice: e.target.value }))} />
+                <label className="label">Precio *</label>
+                {hasVariantsInForm ? (
+                  <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 px-3 py-2">
+                    Este producto tiene variantes: el precio se carga en cada una, más abajo.
+                  </p>
+                ) : (
+                  <input className="input-base" type="number" min="0" value={form.basePrice} onChange={e => setForm(f => ({ ...f, basePrice: e.target.value }))} />
+                )}
               </div>
               <div>
                 <label className="label mb-2">Peso y medidas del paquete *</label>
@@ -458,18 +495,39 @@ export default function AdminProducts() {
                       <button onClick={() => setVariants(vv => vv.filter((_, idx) => idx !== i))} className="absolute top-2 right-2 text-gray-300 hover:text-red-500">
                         <X size={12} />
                       </button>
-                      <div className="col-span-2">
-                        <input className="input-base py-2 text-sm" placeholder="Etiqueta (ej: x10 Brillante)" value={v.label} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, label: e.target.value } : x))} />
+                      <div className="col-span-2 grid grid-cols-3 gap-2 pr-5">
+                        <div className="col-span-2">
+                          <span className="block text-[11px] text-gray-500 mb-0.5">Nombre (lo que ve el cliente) *</span>
+                          <input className="input-base py-2 text-sm" placeholder="ej: 10x15 cm" value={v.label} onChange={e => setVariant(i, 'label', e.target.value)} />
+                        </div>
+                        <div>
+                          <span className="block text-[11px] text-gray-500 mb-0.5">Precio *</span>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                            <input className="input-base py-2 pl-5 text-sm font-semibold" type="number" min="0" placeholder="0" value={v.price} onChange={e => setVariant(i, 'price', e.target.value)} />
+                          </div>
+                        </div>
                       </div>
-                      <input className="input-base py-2 text-sm" placeholder="Tamaño (ej: 10x15)" value={v.size} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, size: e.target.value } : x))} />
-                      <input className="input-base py-2 text-sm" placeholder="Papel (ej: Brillante)" value={v.paperType} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, paperType: e.target.value } : x))} />
-                      <input className="input-base py-2 text-sm" type="number" placeholder="Cantidad" value={v.quantity} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, quantity: e.target.value } : x))} />
-                      <input className="input-base py-2 text-sm" type="number" placeholder="Precio *" value={v.price} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, price: e.target.value } : x))} />
-                      <div className="col-span-2 grid grid-cols-4 gap-2 pt-1 border-t border-gray-100 mt-1">
-                        <input className="input-base py-1.5 text-xs" type="number" placeholder="Peso (g)" value={v.weightGrams} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, weightGrams: e.target.value } : x))} />
-                        <input className="input-base py-1.5 text-xs" type="number" placeholder="Largo (cm)" value={v.lengthCm} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, lengthCm: e.target.value } : x))} />
-                        <input className="input-base py-1.5 text-xs" type="number" placeholder="Ancho (cm)" value={v.widthCm} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, widthCm: e.target.value } : x))} />
-                        <input className="input-base py-1.5 text-xs" type="number" placeholder="Alto (cm)" value={v.heightCm} onChange={e => setVariants(vv => vv.map((x, idx) => idx === i ? { ...x, heightCm: e.target.value } : x))} />
+                      <div>
+                        <span className="block text-[11px] text-gray-500 mb-0.5">Tamaño</span>
+                        <input className="input-base py-2 text-sm" placeholder="ej: 10x15" value={v.size} onChange={e => setVariant(i, 'size', e.target.value)} />
+                      </div>
+                      <div>
+                        <span className="block text-[11px] text-gray-500 mb-0.5">Papel</span>
+                        <input className="input-base py-2 text-sm" placeholder="ej: Brillante" value={v.paperType} onChange={e => setVariant(i, 'paperType', e.target.value)} />
+                      </div>
+                      <div className="col-span-2">
+                        <span className="block text-[11px] text-gray-500 mb-0.5">Cantidad</span>
+                        <input className="input-base py-2 text-sm" type="number" placeholder="ej: 10" value={v.quantity} onChange={e => setVariant(i, 'quantity', e.target.value)} />
+                      </div>
+                      <div className="col-span-2 pt-1 border-t border-gray-100 mt-1">
+                        <span className="block text-[11px] text-gray-500 mb-0.5">Paquete para el envío: peso (g), largo, ancho y alto (cm)</span>
+                        <div className="grid grid-cols-4 gap-2">
+                          <input className="input-base py-1.5 text-xs" type="number" placeholder="Peso (g)" value={v.weightGrams} onChange={e => setVariant(i, 'weightGrams', e.target.value)} />
+                          <input className="input-base py-1.5 text-xs" type="number" placeholder="Largo" value={v.lengthCm} onChange={e => setVariant(i, 'lengthCm', e.target.value)} />
+                          <input className="input-base py-1.5 text-xs" type="number" placeholder="Ancho" value={v.widthCm} onChange={e => setVariant(i, 'widthCm', e.target.value)} />
+                          <input className="input-base py-1.5 text-xs" type="number" placeholder="Alto" value={v.heightCm} onChange={e => setVariant(i, 'heightCm', e.target.value)} />
+                        </div>
                       </div>
                     </div>
                   ))}

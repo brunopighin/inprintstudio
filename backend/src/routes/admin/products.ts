@@ -53,7 +53,8 @@ const hasPackageData = (v: PackageData) =>
 // variante pisa al producto (ver resolveItems en routes/orders.ts).
 function packageError(body: PackageData & { variants?: VariantInput[] }): string | null {
   if (hasPackageData(body)) return null
-  const variants = (body.variants || []).filter(v => v.label && v.price)
+  // Precio 0 es válido (placeholder hasta que la dueña defina precios); no filtrar por price
+  const variants = (body.variants || []).filter(v => v.label)
   if (variants.length && variants.every(hasPackageData)) return null
   return PACKAGE_REQUIRED
 }
