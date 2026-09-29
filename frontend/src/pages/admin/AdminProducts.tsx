@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Search, Pencil, Eye, EyeOff, X, Star, Upload } from 'lucide-react'
+import { Plus, Search, Pencil, Eye, EyeOff, X, Star, Upload, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '../../services/api'
 import { Product, Category } from '../../types'
 
@@ -50,6 +50,7 @@ export default function AdminProducts() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [uploadProgress, setUploadProgress] = useState('')
   const [formError, setFormError] = useState('')
   const [missingPackageData, setMissingPackageData] = useState(0)
 
@@ -159,23 +160,38 @@ export default function AdminProducts() {
     setForm(f => ({ ...f, images: imageList.filter((_, i) => i !== idx).join('\n') }))
   }
 
+  // La primera imagen es la portada que se ve en el catálogo
+  const moveImage = (idx: number, delta: number) => {
+    const target = idx + delta
+    if (target < 0 || target >= imageList.length) return
+    const next = [...imageList]
+    ;[next[idx], next[target]] = [next[target], next[idx]]
+    setForm(f => ({ ...f, images: next.join('\n') }))
+  }
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const files = Array.from(e.target.files || [])
     e.target.value = ''
-    if (!file) return
+    if (!files.length) return
     setUploading(true)
     setUploadError('')
-    try {
-      const data = new FormData()
-      data.append('image', file)
-      const { data: res } = await api.post('/admin/upload', data)
-      setForm(f => ({ ...f, images: [...imageList, res.url].join('\n') }))
-    } catch (err: unknown) {
-      const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Error al subir la imagen'
-      setUploadError(message)
-    } finally {
-      setUploading(false)
+    const failed: string[] = []
+    // De a una, en el orden elegido, y agregando cada una apenas sube para no perder las que ya subieron si otra falla
+    for (const [i, file] of files.entries()) {
+      setUploadProgress(files.length > 1 ? `${i + 1}/${files.length}` : '')
+      try {
+        const data = new FormData()
+        data.append('image', file)
+        const { data: res } = await api.post('/admin/upload', data)
+        setForm(f => ({ ...f, images: [...f.images.split('\n').map(s => s.trim()).filter(Boolean), res.url].join('\n') }))
+      } catch (err: unknown) {
+        const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Error al subir la imagen'
+        failed.push(`${file.name}: ${message}`)
+      }
     }
+    if (failed.length) setUploadError(`No se pudieron subir: ${failed.join(' · ')}`)
+    setUploadProgress('')
+    setUploading(false)
   }
 
   const toggleActive = async (p: Product) => {
@@ -352,24 +368,51 @@ export default function AdminProducts() {
                 {imageList.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {imageList.map((url, idx) => (
-                      <div key={idx} className="relative w-16 h-16 bg-gray-100 border border-gray-200 overflow-hidden group">
+                      <div key={`${idx}-${url}`} className="relative w-20 h-20 bg-gray-100 border border-gray-200 overflow-hidden">
                         <img src={url} alt="" className="w-full h-full object-cover" />
+                        {idx === 0 && (
+                          <span className="absolute top-0 left-0 bg-black text-white text-[10px] px-1 leading-4">Portada</span>
+                        )}
                         <button
                           type="button"
+                          aria-label="Quitar imagen"
                           onClick={() => removeImage(idx)}
-                          className="absolute top-0 right-0 bg-black/70 text-white p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute top-0 right-0 bg-black/70 text-white p-0.5 hover:bg-red-600 transition-colors"
                         >
                           <X size={12} />
                         </button>
+                        {imageList.length > 1 && (
+                          <div className="absolute bottom-0 left-0 right-0 flex justify-between">
+                            <button
+                              type="button"
+                              aria-label="Mover a la izquierda"
+                              onClick={() => moveImage(idx, -1)}
+                              disabled={idx === 0}
+                              className="bg-black/70 text-white p-0.5 disabled:invisible"
+                            >
+                              <ChevronLeft size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Mover a la derecha"
+                              onClick={() => moveImage(idx, 1)}
+                              disabled={idx === imageList.length - 1}
+                              className="bg-black/70 text-white p-0.5 disabled:invisible"
+                            >
+                              <ChevronRight size={12} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
                 <label className={`btn-secondary inline-flex items-center gap-2 text-sm cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                   <Upload size={14} />
-                  {uploading ? 'Subiendo...' : 'Subir imagen'}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                  {uploading ? `Subiendo${uploadProgress ? ` ${uploadProgress}` : ''}...` : 'Subir imágenes'}
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} disabled={uploading} />
                 </label>
+                <p className="text-xs text-gray-400 mt-1">Podés elegir varias fotos a la vez. La primera es la portada del catálogo; usá las flechas para cambiar el orden.</p>
                 {uploadError && <p className="text-red-600 text-xs mt-2">{uploadError}</p>}
                 <textarea
                   className="input-base resize-none font-mono text-xs mt-3"
