@@ -34,7 +34,8 @@ interface CartItemInput {
   notes?: string
 }
 
-const MAX_PHOTOS_PER_ITEM = 200
+// Packs de 100 fotos × varias copias con fotos distintas
+const MAX_PHOTOS_PER_ITEM = 1000
 
 // Solo URLs de fotos subidas por /api/uploads/photo, no cualquier link externo
 const cleanPhotoUrls = (urls: unknown): string[] =>

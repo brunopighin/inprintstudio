@@ -104,7 +104,12 @@ export default function ProductDetail() {
   }, [slug])
 
   // Cuántas fotos pide la variante elegida (campo "Fotos que sube el cliente" del admin)
-  const requiredPhotos = Math.max(1, selectedVariant?.quantity || 1)
+  // Fotos por unidad según la variante (campo "Fotos que sube el cliente" del admin).
+  // Con varias unidades el cliente elige: las mismas fotos para todas (photosPerUnit)
+  // o fotos distintas para cada una (maxPhotos). Otra cantidad sería ambigua.
+  const photosPerUnit = Math.max(1, selectedVariant?.quantity || 1)
+  const maxPhotos = photosPerUnit * quantity
+  const validCounts = maxPhotos === photosPerUnit ? [photosPerUnit] : [photosPerUnit, maxPhotos]
   // Formato fijo del producto (Polaroid, Instax...); sin formato, el cliente elige el recorte
   const photoFormat = getPhotoFormat(product?.photoFormat)
   const cropTarget = photos.find(p => p.id === cropTargetId)
@@ -149,22 +154,22 @@ export default function ProductDetail() {
     const files = Array.from(e.target.files || [])
     e.target.value = ''
     if (!files.length) return
-    const slots = requiredPhotos - photos.length
+    const slots = maxPhotos - photos.length
     const accepted = files.slice(0, Math.max(0, slots))
     setPhotoNotice(files.length > accepted.length
-      ? `Elegiste ${files.length} fotos y esta opción lleva ${requiredPhotos}: se usaron las primeras ${accepted.length}.`
+      ? `Elegiste ${files.length} fotos y entran ${maxPhotos}: se usaron las primeras ${accepted.length}.`
       : '')
     if (!accepted.length) return
 
     const entries: CustomerPhoto[] = accepted.map(file => {
       const src = URL.createObjectURL(file)
-      return { id: ++photoCounter, original: file, originalSrc: src, previewSrc: src, status: requiredPhotos === 1 ? 'cropping' : 'uploading' }
+      return { id: ++photoCounter, original: file, originalSrc: src, previewSrc: src, status: maxPhotos === 1 ? 'cropping' : 'uploading' }
     })
     setPhotos(ps => [...ps, ...entries])
 
     // Con una sola foto se mantiene el flujo de siempre: recortar y después subir.
     // En un pack se suben directo y el recorte queda opcional por foto.
-    if (requiredPhotos === 1) {
+    if (maxPhotos === 1) {
       openCropperFor(entries[0].id)
       return
     }
@@ -222,14 +227,24 @@ export default function ProductDetail() {
     await uploadPhoto(cropTarget.id, blob, cropTarget.original.name.replace(/\.\w+$/, '') + '-recorte.jpg')
   }
 
+  const fotos = (n: number) => `${n} ${n === 1 ? 'foto' : 'fotos'}`
+
+  function photoCountHint() {
+    if (validCounts.length === 1) {
+      const missing = maxPhotos - photos.length
+      return `Te ${missing === 1 ? 'falta 1 foto' : `faltan ${missing} fotos`} (cargaste ${photos.length} de ${maxPhotos}).`
+    }
+    return `Cargaste ${fotos(photos.length)}: tienen que ser ${photosPerUnit} (${photosPerUnit === 1 ? 'se repite' : 'se repiten'} en las ${quantity} copias) o ${maxPhotos} (distintas para cada copia).`
+  }
+
   const uploadingCount = photos.filter(p => p.status === 'uploading' || p.status === 'cropping').length
   const failedCount = photos.filter(p => p.status === 'error').length
   // Las fotos siguen siendo opcionales (se pueden mandar después), pero si empezó a cargarlas tienen que ser justas
   const photoProblem =
     uploadingCount ? `Subiendo fotos (${photos.length - uploadingCount}/${photos.length})...`
     : failedCount ? `${failedCount === 1 ? 'Una foto no se pudo subir' : `${failedCount} fotos no se pudieron subir`}: reintentá o quitala.`
-    : photos.length > requiredPhotos ? `Esta opción lleva ${requiredPhotos} ${requiredPhotos === 1 ? 'foto' : 'fotos'}: quitá ${photos.length - requiredPhotos}.`
-    : photos.length > 0 && photos.length < requiredPhotos ? `Te ${requiredPhotos - photos.length === 1 ? 'falta 1 foto' : `faltan ${requiredPhotos - photos.length} fotos`} (cargaste ${photos.length} de ${requiredPhotos}).`
+    : photos.length > maxPhotos ? `Entran hasta ${maxPhotos} ${maxPhotos === 1 ? 'foto' : 'fotos'}: quitá ${photos.length - maxPhotos}.`
+    : photos.length > 0 && !validCounts.includes(photos.length) ? photoCountHint()
     : ''
 
   const handleAddToCart = () => {
@@ -268,7 +283,7 @@ export default function ProductDetail() {
   const currentPrice = selectedVariant?.price ?? product.basePrice
   // Con una sola foto se muestra grande en la galería, como antes; en un pack se ven en la grilla
   // Si cambió de un pack a una opción de 1 foto con varias ya cargadas, se sigue viendo la grilla para poder quitar las que sobran
-  const singleMode = requiredPhotos === 1 && photos.length <= 1
+  const singleMode = maxPhotos === 1 && photos.length <= 1
   const singlePhoto = singleMode && photos[0]?.status !== 'cropping' ? photos[0] : undefined
   const photoPreview = singlePhoto?.previewSrc
 
@@ -373,6 +388,16 @@ export default function ProductDetail() {
               </div>
             )}
 
+            {/* Quantity */}
+            <div className="mb-6">
+              <label className="label">Cantidad de pedidos</label>
+              <div className="flex items-center border border-gray-300 w-fit">
+                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-lg">−</button>
+                <span className="w-12 text-center font-semibold">{quantity}</span>
+                <button onClick={() => setQuantity(q => q + 1)} className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-lg">+</button>
+              </div>
+            </div>
+
             {/* Photo upload */}
             <div className="mb-6">
               {singleMode ? (
@@ -421,11 +446,16 @@ export default function ProductDetail() {
               ) : (
                 <>
                   <div className="flex items-baseline justify-between mb-2">
-                    <label className="label mb-0">{requiredPhotos === 1 ? 'Cargá tu foto' : `Cargá tus ${requiredPhotos} fotos`}</label>
-                    <span className={`text-sm font-bold ${photos.length === requiredPhotos ? 'text-green-700' : photos.length > requiredPhotos ? 'text-red-600' : 'text-gray-500'}`}>
-                      {photos.length}/{requiredPhotos}
+                    <label className="label mb-0">{validCounts.length > 1 ? 'Cargá tus fotos' : maxPhotos === 1 ? 'Cargá tu foto' : `Cargá tus ${maxPhotos} fotos`}</label>
+                    <span className={`text-sm font-bold ${validCounts.includes(photos.length) ? 'text-green-700' : photos.length > maxPhotos ? 'text-red-600' : 'text-gray-500'}`}>
+                      {photos.length}/{maxPhotos}
                     </span>
                   </div>
+                  {validCounts.length > 1 && (
+                    <p className="text-xs text-gray-500 -mt-1 mb-3">
+                      Para tus {quantity} copias podés cargar {fotos(photosPerUnit)} ({photosPerUnit === 1 ? 'se imprime' : 'se imprimen'} en todas) o {fotos(maxPhotos)} distintas ({photosPerUnit === 1 ? 'una por copia' : `${photosPerUnit} por copia`}).
+                    </p>
+                  )}
                   {photos.length > 0 && (
                     <div className={`grid gap-2 mb-3 ${photoFormat?.frame ? 'grid-cols-3 sm:grid-cols-4 gap-3' : 'grid-cols-4 sm:grid-cols-5'}`}>
                       {photos.map(p => (
@@ -454,12 +484,12 @@ export default function ProductDetail() {
                       ))}
                     </div>
                   )}
-                  {photos.length < requiredPhotos && (
+                  {photos.length < maxPhotos && (
                     <label className="flex flex-col items-center gap-2 border-2 border-dashed border-gray-300 p-5 cursor-pointer hover:border-black transition-colors group">
                       <Upload size={22} className="text-gray-400 group-hover:text-black transition-colors" />
                       <div className="text-center">
                         <p className="text-sm font-medium">
-                          {photos.length === 0 ? `Elegí tus ${requiredPhotos} fotos` : `Agregá ${requiredPhotos - photos.length} más`}
+                          {photos.length === 0 ? (validCounts.length > 1 ? 'Elegí tus fotos' : `Elegí tus ${maxPhotos} fotos`) : `Podés agregar ${maxPhotos - photos.length} más`}
                         </p>
                         <p className="text-xs text-gray-400 mt-1">Podés seleccionar varias a la vez · JPG, PNG o HEIC · Máx. 25 MB c/u</p>
                       </div>
@@ -470,16 +500,6 @@ export default function ProductDetail() {
                 </>
               )}
               {photoNotice && <p className="text-xs text-gray-500 mt-2">{photoNotice}</p>}
-            </div>
-
-            {/* Quantity */}
-            <div className="mb-8">
-              <label className="label">Cantidad de pedidos</label>
-              <div className="flex items-center border border-gray-300 w-fit">
-                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-lg">−</button>
-                <span className="w-12 text-center font-semibold">{quantity}</span>
-                <button onClick={() => setQuantity(q => q + 1)} className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-lg">+</button>
-              </div>
             </div>
 
             {/* Add to cart */}

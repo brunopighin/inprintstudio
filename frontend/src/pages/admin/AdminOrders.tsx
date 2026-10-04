@@ -61,6 +61,16 @@ async function downloadPhotos(urls: string[], orderNumber: string, productName?:
 
 const MAX_THUMBS = 6
 
+// Con varias copias el cliente sube las mismas fotos para todas o fotos distintas
+// para cada una: se aclara cuál de las dos eligió para que se imprima bien.
+function printNote(quantity: number, photosPerUnit: number | undefined, photoCount: number): string {
+  const units = quantity * Math.max(1, photosPerUnit || 1)
+  if (quantity <= 1) return ''
+  if (photoCount === units) return 'Fotos distintas para cada copia: imprimir una de cada foto.'
+  const copies = units / photoCount
+  return Number.isInteger(copies) ? `Mismas fotos en todas las copias: imprimir cada foto ×${copies}.` : ''
+}
+
 const SHIPPING_METHOD_LABELS: Record<string, string> = {
   shipping: 'Envío a domicilio',
   pickup: 'Retiro en local',
@@ -319,6 +329,9 @@ export default function AdminOrders() {
                                         <span className="text-gray-700">{item.product?.name} {item.variant && `(${item.variant.label})`} ×{item.quantity}</span>
                                         <span className="font-medium whitespace-nowrap">${(item.price * item.quantity).toLocaleString('es-AR')}</span>
                                       </div>
+                                      {photos.length > 0 && printNote(item.quantity, item.variant?.quantity, photos.length) && (
+                                        <p className="text-xs text-gray-500 mt-1">{printNote(item.quantity, item.variant?.quantity, photos.length)}</p>
+                                      )}
                                       {photos.length > 0 && (
                                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                           {photos.slice(0, MAX_THUMBS).map((url, i) => (

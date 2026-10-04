@@ -55,6 +55,8 @@ export default function CartDrawer() {
                 const price = item.variant?.price ?? item.product.basePrice
                 const images = JSON.parse(item.product.images || '[]')
                 const imageUrl = images[0] || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200&q=60'
+                // Con fotos distintas para cada copia, cambiar la cantidad acá dejaría fotos de más o de menos
+                const quantityLocked = item.photoUrls.length > Math.max(1, item.variant?.quantity || 1)
                 return (
                   <div key={item.lineId} className="flex gap-4">
                     <div className="w-20 h-20 bg-gray-100 flex-shrink-0 overflow-hidden">
@@ -69,6 +71,9 @@ export default function CartDrawer() {
                         <p className="text-xs text-gray-500 mt-0.5">📷 {item.photoUrls.length === 1 ? 'Foto cargada' : `${item.photoUrls.length} fotos cargadas`}</p>
                       )}
                       <div className="flex items-center justify-between mt-2">
+                        {quantityLocked ? (
+                          <span className="text-xs text-gray-500">{(item.variant?.quantity || 1) > 1 ? `${item.quantity} packs con fotos distintas` : `${item.quantity} copias · una por foto`}</span>
+                        ) : (
                         <div className="flex items-center border border-gray-200">
                           <button
                             onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
@@ -84,6 +89,7 @@ export default function CartDrawer() {
                             <Plus size={12} />
                           </button>
                         </div>
+                        )}
                         <span className="text-sm font-bold">{formatPrice(price * item.quantity)}</span>
                       </div>
                     </div>
