@@ -3,9 +3,13 @@ import { Mail, Instagram } from 'lucide-react'
 import logoWhite from '../../assets/logo-white.png'
 import WhatsAppIcon from '../icons/WhatsAppIcon'
 import { WHATSAPP_NUMBER, formatWhatsApp, whatsappLink } from '../../config'
+import WhatsAppButton from './WhatsAppButton'
 
 export default function Footer() {
   return (
+    <>
+    {/* Va acá porque el footer está en todas las páginas de la tienda y en ninguna del admin */}
+    <WhatsAppButton />
     <footer className="bg-black text-white mt-24">
       <div className="container-main py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
@@ -75,5 +79,6 @@ export default function Footer() {
         </div>
       </div>
     </footer>
+    </>
   )
 }
