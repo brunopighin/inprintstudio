@@ -56,6 +56,15 @@ export default function Catalog() {
     setSearchParams(next)
   }
 
+  // Aparte de updateFilter, que siempre vuelve a la página 1 al cambiar un filtro
+  const goToPage = (n: number) => {
+    const next = new URLSearchParams(searchParams)
+    if (n > 1) next.set('page', String(n))
+    else next.delete('page')
+    setSearchParams(next)
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+  }
+
   return (
     <div className="min-h-screen">
       {/* Page header */}
@@ -135,7 +144,7 @@ export default function Catalog() {
                   {search && (
                     <span className="badge bg-black text-white gap-1">
                       "{search}"
-                      <button onClick={() => { const p = new URLSearchParams(searchParams); p.delete('search'); setSearchParams(p) }}><X size={12} /></button>
+                      <button onClick={() => updateFilter('search', '')}><X size={12} /></button>
                     </span>
                   )}
                   {subcategory && (
@@ -180,7 +189,7 @@ export default function Catalog() {
                 {Array.from({ length: Math.ceil(total / 12) }).map((_, i) => (
                   <button
                     key={i}
-                    onClick={() => updateFilter('page', String(i + 1))}
+                    onClick={() => goToPage(i + 1)}
                     className={`w-10 h-10 text-sm font-medium border transition-colors ${page === i + 1 ? 'bg-black text-white border-black' : 'border-gray-300 hover:border-black'}`}
                   >
                     {i + 1}
