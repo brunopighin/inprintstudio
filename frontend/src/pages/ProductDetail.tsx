@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ShoppingBag, Upload, Check, Crop as CropIcon, Loader2, RotateCw, X } from 'lucide-react'
-import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop'
+import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop, convertToPixelCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import api from '../services/api'
 import { Product, ProductVariant } from '../types'
 import { useCart } from '../context/CartContext'
 import ImageSlider from '../components/product/ImageSlider'
 import ProductDescription from '../components/product/ProductDescription'
+import FramedPhoto from '../components/product/FramedPhoto'
+import { getPhotoFormat } from '../utils/photoFormats'
 
 const ASPECT_PRESETS: { label: string; value: number | undefined }[] = [
   { label: 'Vertical', value: 2 / 3 },
@@ -37,6 +39,23 @@ function getCroppedBlob(image: HTMLImageElement, crop: PixelCrop): Promise<Blob 
     crop.x * scaleX, crop.y * scaleY, crop.width * scaleX, crop.height * scaleY,
     0, 0, canvas.width, canvas.height
   )
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+}
+
+// Recorte centrado al formato del producto, para los packs: cada foto ya queda en
+// la proporción correcta y el cliente la ajusta solo si quiere. Si el navegador no
+// puede abrir la imagen (ej. HEIC fuera de Safari) devuelve null y se sube la original.
+async function centerCropToAspect(src: string, aspect: number): Promise<Blob | null> {
+  const img = new Image()
+  img.src = src
+  try { await img.decode() } catch { return null }
+  const { naturalWidth: w, naturalHeight: h } = img
+  const cropW = Math.min(w, h * aspect)
+  const cropH = cropW / aspect
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(cropW)
+  canvas.height = Math.round(cropH)
+  canvas.getContext('2d')!.drawImage(img, (w - cropW) / 2, (h - cropH) / 2, cropW, cropH, 0, 0, canvas.width, canvas.height)
   return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
 }
 
@@ -86,6 +105,8 @@ export default function ProductDetail() {
 
   // Cuántas fotos pide la variante elegida (campo "Fotos que sube el cliente" del admin)
   const requiredPhotos = Math.max(1, selectedVariant?.quantity || 1)
+  // Formato fijo del producto (Polaroid, Instax...); sin formato, el cliente elige el recorte
+  const photoFormat = getPhotoFormat(product?.photoFormat)
   const cropTarget = photos.find(p => p.id === cropTargetId)
 
   const updatePhoto = (id: number, patch: Partial<CustomerPhoto>) =>
@@ -106,7 +127,7 @@ export default function ProductDetail() {
 
   const openCropperFor = (id: number) => {
     setCropTargetId(id)
-    setAspectPreset(2 / 3)
+    setAspectPreset(photoFormat?.aspect ?? 2 / 3)
     setCrop(undefined)
     setCompletedCrop(undefined)
   }
@@ -150,7 +171,13 @@ export default function ProductDetail() {
     const queue = [...entries]
     const worker = async () => {
       for (let next = queue.shift(); next; next = queue.shift()) {
-        await uploadPhoto(next.id, next.original, next.original.name)
+        const cropped = photoFormat ? await centerCropToAspect(next.originalSrc, photoFormat.aspect) : null
+        if (cropped) {
+          updatePhoto(next.id, { previewSrc: URL.createObjectURL(cropped) })
+          await uploadPhoto(next.id, cropped, next.original.name.replace(/.w+$/, '') + '-recorte.jpg')
+        } else {
+          await uploadPhoto(next.id, next.original, next.original.name)
+        }
       }
     }
     await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, worker))
@@ -170,13 +197,18 @@ export default function ProductDetail() {
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget
-    setCrop(centeredCropFor(aspectPreset, width, height))
+    const initial = centeredCropFor(aspectPreset, width, height)
+    setCrop(initial)
+    // ReactCrop no avisa onComplete con el recorte inicial: sin esto, "Usar esta foto" sin mover el recuadro no hacía nada
+    setCompletedCrop(convertToPixelCrop(initial, width, height))
   }
 
   const handleAspectChange = (aspect: number | undefined) => {
     setAspectPreset(aspect)
     if (imgRef.current) {
-      setCrop(centeredCropFor(aspect, imgRef.current.width, imgRef.current.height))
+      const next = centeredCropFor(aspect, imgRef.current.width, imgRef.current.height)
+      setCrop(next)
+      setCompletedCrop(convertToPixelCrop(next, imgRef.current.width, imgRef.current.height))
     }
   }
 
@@ -262,7 +294,19 @@ export default function ProductDetail() {
             <div className="relative aspect-square bg-gray-100 overflow-hidden">
               {photoPreview ? (
                 <>
-                  <img src={photoPreview} alt={product.name} className="w-full h-full object-cover" />
+                  {photoFormat ? (
+                    <div className="w-full h-full flex items-center justify-center p-8 sm:p-12">
+                      <FramedPhoto
+                        src={photoPreview}
+                        format={photoFormat}
+                        className="w-full"
+                        // Que entre en el cuadrado: las verticales se achican según su proporción
+                        style={{ maxWidth: `${Math.min(100, photoFormat.aspect * 100 * (photoFormat.frame ? 0.82 : 1))}%` }}
+                      />
+                    </div>
+                  ) : (
+                    <img src={photoPreview} alt={product.name} className="w-full h-full object-cover" />
+                  )}
                   <div className="absolute top-3 left-3 bg-black text-white text-xs px-2 py-1">
                     Vista previa de tu foto
                   </div>
@@ -383,10 +427,10 @@ export default function ProductDetail() {
                     </span>
                   </div>
                   {photos.length > 0 && (
-                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-3">
+                    <div className={`grid gap-2 mb-3 ${photoFormat?.frame ? 'grid-cols-3 sm:grid-cols-4 gap-3' : 'grid-cols-4 sm:grid-cols-5'}`}>
                       {photos.map(p => (
-                        <div key={p.id} className={`relative aspect-square bg-gray-100 overflow-hidden border-2 ${p.status === 'error' ? 'border-red-500' : 'border-transparent'}`}>
-                          <img src={p.previewSrc} alt="" className={`w-full h-full object-cover ${p.status === 'uploading' ? 'opacity-50' : ''}`} />
+                        <div key={p.id} className={`relative self-start border-2 ${p.status === 'error' ? 'border-red-500' : 'border-transparent'}`}>
+                          <FramedPhoto src={p.previewSrc} format={photoFormat} imgClassName={p.status === 'uploading' ? 'opacity-50' : ''} />
                           {p.status === 'uploading' && (
                             <span className="absolute inset-0 flex items-center justify-center"><Loader2 size={18} className="animate-spin text-black" /></span>
                           )}
@@ -471,9 +515,9 @@ export default function ProductDetail() {
       {cropTarget && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <h3 className="font-bold text-lg mb-4">Recortá tu foto</h3>
+            <h3 className="font-bold text-lg mb-4">Recortá tu foto{photoFormat && <span className="font-normal text-gray-500 text-sm"> · {photoFormat.label}</span>}</h3>
 
-            <div className="flex gap-2 mb-4">
+            <div className={`flex gap-2 mb-4 ${photoFormat ? 'hidden' : ''}`}>
               {ASPECT_PRESETS.map(p => (
                 <button
                   key={p.label}

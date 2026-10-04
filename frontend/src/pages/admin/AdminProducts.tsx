@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Search, Pencil, Eye, EyeOff, X, Star, Upload, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '../../services/api'
 import { Product, Category } from '../../types'
+import { PHOTO_FORMATS } from '../../utils/photoFormats'
 
 interface VariantInput {
   label: string
@@ -70,7 +71,7 @@ export default function AdminProducts() {
   const [form, setForm] = useState({
     name: '', description: '', categoryId: '', subcategoryId: '',
     images: '', basePrice: '', featured: false, active: true,
-    weightGrams: '', lengthCm: '', widthCm: '', heightCm: '',
+    weightGrams: '', lengthCm: '', widthCm: '', heightCm: '', photoFormat: '',
   })
   const [variants, setVariants] = useState<VariantInput[]>([emptyVariant()])
 
@@ -109,7 +110,7 @@ export default function AdminProducts() {
 
   const openCreate = () => {
     setEditProduct(null)
-    setForm({ name: '', description: '', categoryId: '', subcategoryId: '', images: '', basePrice: '', featured: false, active: true, weightGrams: '', lengthCm: '', widthCm: '', heightCm: '' })
+    setForm({ name: '', description: '', categoryId: '', subcategoryId: '', images: '', basePrice: '', featured: false, active: true, weightGrams: '', lengthCm: '', widthCm: '', heightCm: '', photoFormat: '' })
     setVariants([emptyVariant()])
     setUploadError('')
     setModalOpen(true)
@@ -125,6 +126,7 @@ export default function AdminProducts() {
       featured: p.featured, active: p.active,
       weightGrams: String(p.weightGrams ?? ''), lengthCm: String(p.lengthCm ?? ''),
       widthCm: String(p.widthCm ?? ''), heightCm: String(p.heightCm ?? ''),
+      photoFormat: p.photoFormat || '',
     })
     setVariants(p.variants.length > 0 ? p.variants.map(v => ({
       label: v.label, size: v.size || '', paperType: v.paperType || '',
@@ -403,6 +405,14 @@ export default function AdminProducts() {
                   <input className="input-base py-2 text-sm" type="number" placeholder="Ancho (cm)" value={form.widthCm} onChange={e => setForm(f => ({ ...f, widthCm: e.target.value }))} />
                   <input className="input-base py-2 text-sm" type="number" placeholder="Alto (cm)" value={form.heightCm} onChange={e => setForm(f => ({ ...f, heightCm: e.target.value }))} />
                 </div>
+              </div>
+              <div>
+                <label className="label">Formato de la foto del cliente</label>
+                <select className="input-base" value={form.photoFormat} onChange={e => setForm(f => ({ ...f, photoFormat: e.target.value }))}>
+                  <option value="">Libre (el cliente elige el recorte)</option>
+                  {Object.entries(PHOTO_FORMATS).map(([key, fmt]) => <option key={key} value={key}>{fmt.label}</option>)}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Define cómo se recorta la foto que sube el cliente. Polaroid e Instax además le muestran la foto con el marco blanco.</p>
               </div>
               <div>
                 <label className="label">Imágenes</label>

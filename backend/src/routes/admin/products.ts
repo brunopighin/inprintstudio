@@ -113,7 +113,7 @@ router.patch('/bulk-activate', requireAdmin, async (req: AuthRequest, res: Respo
 
 router.post('/', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, description, categoryId, subcategoryId, images, basePrice, weightGrams, lengthCm, widthCm, heightCm, featured, active, variants } = req.body
+    const { name, description, categoryId, subcategoryId, images, basePrice, weightGrams, lengthCm, widthCm, heightCm, photoFormat, featured, active, variants } = req.body
 
     const packageProblem = packageError(req.body)
     if (packageProblem) { res.status(400).json({ error: packageProblem }); return }
@@ -129,6 +129,7 @@ router.post('/', requireAdmin, async (req: AuthRequest, res: Response) => {
         lengthCm: toIntOrNull(lengthCm),
         widthCm: toIntOrNull(widthCm),
         heightCm: toIntOrNull(heightCm),
+        photoFormat: typeof photoFormat === 'string' && photoFormat ? photoFormat.slice(0, 30) : null,
         slug,
         featured: Boolean(featured),
         active: active !== false,
@@ -176,7 +177,7 @@ router.patch('/:id/active', requireAdmin, async (req: AuthRequest, res: Response
 
 router.put('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, description, categoryId, subcategoryId, images, basePrice, weightGrams, lengthCm, widthCm, heightCm, featured, active, variants } = req.body
+    const { name, description, categoryId, subcategoryId, images, basePrice, weightGrams, lengthCm, widthCm, heightCm, photoFormat, featured, active, variants } = req.body
 
     const packageProblem = packageError(req.body)
     if (packageProblem) { res.status(400).json({ error: packageProblem }); return }
@@ -194,6 +195,7 @@ router.put('/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
         lengthCm: toIntOrNull(lengthCm),
         widthCm: toIntOrNull(widthCm),
         heightCm: toIntOrNull(heightCm),
+        photoFormat: typeof photoFormat === 'string' && photoFormat ? photoFormat.slice(0, 30) : null,
         featured: Boolean(featured),
         active: Boolean(active),
         variants: variants?.length ? {

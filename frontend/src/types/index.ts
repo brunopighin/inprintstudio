@@ -54,6 +54,8 @@ export interface Product {
   lengthCm?: number
   widthCm?: number
   heightCm?: number
+  // Clave de PHOTO_FORMATS (utils/photoFormats); null = el cliente elige el recorte
+  photoFormat?: string | null
   variants: ProductVariant[]
   active: boolean
   featured: boolean

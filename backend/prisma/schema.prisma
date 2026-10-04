@@ -64,6 +64,8 @@ model Product {
   lengthCm      Int?
   widthCm       Int?
   heightCm      Int?
+  // Formato del recorte de la foto del cliente (polaroid, instax, square...); null = libre
+  photoFormat   String?
   variants      ProductVariant[]
   active        Boolean          @default(true)
   featured      Boolean          @default(false)
