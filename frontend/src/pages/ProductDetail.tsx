@@ -9,7 +9,7 @@ import { useCart } from '../context/CartContext'
 import ImageSlider from '../components/product/ImageSlider'
 import ProductDescription from '../components/product/ProductDescription'
 import FramedPhoto from '../components/product/FramedPhoto'
-import { getPhotoFormat } from '../utils/photoFormats'
+import { getPhotoFormat, resolveAspect, Orientation } from '../utils/photoFormats'
 
 const ASPECT_PRESETS: { label: string; value: number | undefined }[] = [
   { label: 'Vertical', value: 2 / 3 },
@@ -43,21 +43,32 @@ function getCroppedBlob(image: HTMLImageElement, crop: PixelCrop): Promise<Blob 
 }
 
 // Recorte centrado al formato del producto, para los packs: cada foto ya queda en
-// la proporción correcta y el cliente la ajusta solo si quiere. Si el navegador no
-// puede abrir la imagen (ej. HEIC fuera de Safari) devuelve null y se sube la original.
-async function centerCropToAspect(src: string, aspect: number): Promise<Blob | null> {
+// la proporción correcta y el cliente la ajusta solo si quiere. aspectFor recibe la
+// orientación de la propia foto (si es apaisada, horizontal) por si el formato deja
+// elegir. Si el navegador no puede abrir la imagen (ej. HEIC fuera de Safari)
+// devuelve null y se sube la original.
+async function autoCrop(
+  src: string,
+  aspectFor: (o: Orientation) => number,
+  orientation?: Orientation,
+): Promise<{ blob: Blob; orientation: Orientation; aspect: number } | null> {
   const img = new Image()
   img.src = src
   try { await img.decode() } catch { return null }
   const { naturalWidth: w, naturalHeight: h } = img
+  const o = orientation ?? (w > h ? 'horizontal' : 'vertical')
+  const aspect = aspectFor(o)
   const cropW = Math.min(w, h * aspect)
   const cropH = cropW / aspect
   const canvas = document.createElement('canvas')
   canvas.width = Math.round(cropW)
   canvas.height = Math.round(cropH)
   canvas.getContext('2d')!.drawImage(img, (w - cropW) / 2, (h - cropH) / 2, cropW, cropH, 0, 0, canvas.width, canvas.height)
-  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+  return blob && { blob, orientation: o, aspect }
 }
+
+const croppedName = (file: File) => file.name.replace(/\.\w+$/, '') + '-recorte.jpg'
 
 // Una foto del cliente. Se sube al servidor apenas se elige (o apenas se recorta),
 // así el carrito y el pedido solo llevan URLs aunque sea un pack de 100 fotos.
@@ -69,6 +80,8 @@ interface CustomerPhoto {
   url?: string
   status: 'cropping' | 'uploading' | 'done' | 'error'
   error?: string
+  orientation?: Orientation
+  aspect?: number // proporción del recorte actual; si cambia la medida elegida, se vuelve a recortar
 }
 
 const UPLOAD_CONCURRENCY = 3
@@ -88,6 +101,7 @@ export default function ProductDetail() {
 
   const [cropTargetId, setCropTargetId] = useState<number | null>(null)
   const [aspectPreset, setAspectPreset] = useState<number | undefined>(2 / 3)
+  const [cropOrientation, setCropOrientation] = useState<Orientation | undefined>()
   const [crop, setCrop] = useState<Crop>()
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>()
   const imgRef = useRef<HTMLImageElement>(null)
@@ -103,7 +117,6 @@ export default function ProductDetail() {
       .finally(() => setLoading(false))
   }, [slug])
 
-  // Cuántas fotos pide la variante elegida (campo "Fotos que sube el cliente" del admin)
   // Fotos por unidad según la variante (campo "Fotos que sube el cliente" del admin).
   // Con varias unidades el cliente elige: las mismas fotos para todas (photosPerUnit)
   // o fotos distintas para cada una (maxPhotos). Otra cantidad sería ambigua.
@@ -112,6 +125,8 @@ export default function ProductDetail() {
   const validCounts = maxPhotos === photosPerUnit ? [photosPerUnit] : [photosPerUnit, maxPhotos]
   // Formato fijo del producto (Polaroid, Instax...); sin formato, el cliente elige el recorte
   const photoFormat = getPhotoFormat(product?.photoFormat)
+  // Proporción según formato, medida de la opción elegida y orientación (solo importa en formatos orientables)
+  const aspectFor = (o: Orientation = 'vertical') => resolveAspect(photoFormat, selectedVariant, o) ?? 2 / 3
   const cropTarget = photos.find(p => p.id === cropTargetId)
 
   const updatePhoto = (id: number, patch: Partial<CustomerPhoto>) =>
@@ -131,8 +146,11 @@ export default function ProductDetail() {
   }
 
   const openCropperFor = (id: number) => {
+    // Recién elegida la foto todavía no está en el estado: la orientación se detecta al cargarla en el modal
+    const orientation = photos.find(p => p.id === id)?.orientation
     setCropTargetId(id)
-    setAspectPreset(photoFormat?.aspect ?? 2 / 3)
+    setCropOrientation(orientation)
+    setAspectPreset(photoFormat ? aspectFor(orientation) : 2 / 3)
     setCrop(undefined)
     setCompletedCrop(undefined)
   }
@@ -176,10 +194,10 @@ export default function ProductDetail() {
     const queue = [...entries]
     const worker = async () => {
       for (let next = queue.shift(); next; next = queue.shift()) {
-        const cropped = photoFormat ? await centerCropToAspect(next.originalSrc, photoFormat.aspect) : null
+        const cropped = photoFormat ? await autoCrop(next.originalSrc, aspectFor) : null
         if (cropped) {
-          updatePhoto(next.id, { previewSrc: URL.createObjectURL(cropped) })
-          await uploadPhoto(next.id, cropped, next.original.name.replace(/.w+$/, '') + '-recorte.jpg')
+          updatePhoto(next.id, { previewSrc: URL.createObjectURL(cropped.blob), orientation: cropped.orientation, aspect: cropped.aspect })
+          await uploadPhoto(next.id, cropped.blob, croppedName(next.original))
         } else {
           await uploadPhoto(next.id, next.original, next.original.name)
         }
@@ -201,8 +219,16 @@ export default function ProductDetail() {
   }
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const { width, height } = e.currentTarget
-    const initial = centeredCropFor(aspectPreset, width, height)
+    const { width, height, naturalWidth, naturalHeight } = e.currentTarget
+    let aspect = aspectPreset
+    // Primera vez que se recorta en un formato orientable: arranca con la orientación de la foto
+    if (photoFormat?.orientable && !cropOrientation) {
+      const o: Orientation = naturalWidth > naturalHeight ? 'horizontal' : 'vertical'
+      aspect = aspectFor(o)
+      setCropOrientation(o)
+      setAspectPreset(aspect)
+    }
+    const initial = centeredCropFor(aspect, width, height)
     setCrop(initial)
     // ReactCrop no avisa onComplete con el recorte inicial: sin esto, "Usar esta foto" sin mover el recuadro no hacía nada
     setCompletedCrop(convertToPixelCrop(initial, width, height))
@@ -222,10 +248,31 @@ export default function ProductDetail() {
     const blob = await getCroppedBlob(imgRef.current, completedCrop)
     if (!blob) return
     if (cropTarget.previewSrc !== cropTarget.originalSrc) URL.revokeObjectURL(cropTarget.previewSrc)
-    updatePhoto(cropTarget.id, { previewSrc: URL.createObjectURL(blob) })
+    updatePhoto(cropTarget.id, { previewSrc: URL.createObjectURL(blob), orientation: cropOrientation, aspect: aspectPreset })
     setCropTargetId(null)
-    await uploadPhoto(cropTarget.id, blob, cropTarget.original.name.replace(/\.\w+$/, '') + '-recorte.jpg')
+    await uploadPhoto(cropTarget.id, blob, croppedName(cropTarget.original))
   }
+
+  // Si cambia la medida (10x15 -> 13x18) las fotos ya recortadas quedan con otra
+  // proporción: se vuelven a recortar al centro, manteniendo la orientación de cada una
+  const currentRatioKey = photoFormat?.orientable ? aspectFor('vertical').toFixed(4) : ''
+  useEffect(() => {
+    if (!currentRatioKey) return
+    const stale = photos.filter(p =>
+      p.aspect !== undefined && p.status !== 'uploading' && p.status !== 'cropping' &&
+      Math.abs(p.aspect - aspectFor(p.orientation)) > 0.001)
+    if (!stale.length) return
+    setPhotoNotice('Cambiaste la medida: volvimos a recortar tus fotos al centro. Revisalas por si querés ajustar alguna.')
+    stale.forEach(async p => {
+      const cropped = await autoCrop(p.originalSrc, aspectFor, p.orientation)
+      if (!cropped) return
+      if (p.previewSrc !== p.originalSrc) URL.revokeObjectURL(p.previewSrc)
+      updatePhoto(p.id, { previewSrc: URL.createObjectURL(cropped.blob), aspect: cropped.aspect })
+      await uploadPhoto(p.id, cropped.blob, croppedName(p.original))
+    })
+    // Solo cuando cambia la medida; las fotos se leen del render actual
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRatioKey])
 
   const fotos = (n: number) => `${n} ${n === 1 ? 'foto' : 'fotos'}`
 
@@ -286,6 +333,7 @@ export default function ProductDetail() {
   const singleMode = maxPhotos === 1 && photos.length <= 1
   const singlePhoto = singleMode && photos[0]?.status !== 'cropping' ? photos[0] : undefined
   const photoPreview = singlePhoto?.previewSrc
+  const previewAspect = singlePhoto?.aspect ?? photoFormat?.aspect ?? 1
 
   return (
     <div className="min-h-screen">
@@ -314,9 +362,10 @@ export default function ProductDetail() {
                       <FramedPhoto
                         src={photoPreview}
                         format={photoFormat}
+                        aspect={previewAspect}
                         className="w-full"
                         // Que entre en el cuadrado: las verticales se achican según su proporción
-                        style={{ maxWidth: `${Math.min(100, photoFormat.aspect * 100 * (photoFormat.frame ? 0.82 : 1))}%` }}
+                        style={{ maxWidth: `${Math.min(100, previewAspect * 100 * (photoFormat.frame ? 0.82 : 1))}%` }}
                       />
                     </div>
                   ) : (
@@ -460,7 +509,7 @@ export default function ProductDetail() {
                     <div className={`grid gap-2 mb-3 ${photoFormat?.frame ? 'grid-cols-3 sm:grid-cols-4 gap-3' : 'grid-cols-4 sm:grid-cols-5'}`}>
                       {photos.map(p => (
                         <div key={p.id} className={`relative self-start border-2 ${p.status === 'error' ? 'border-red-500' : 'border-transparent'}`}>
-                          <FramedPhoto src={p.previewSrc} format={photoFormat} imgClassName={p.status === 'uploading' ? 'opacity-50' : ''} />
+                          <FramedPhoto src={p.previewSrc} format={photoFormat} aspect={p.aspect} imgClassName={p.status === 'uploading' ? 'opacity-50' : ''} />
                           {p.status === 'uploading' && (
                             <span className="absolute inset-0 flex items-center justify-center"><Loader2 size={18} className="animate-spin text-black" /></span>
                           )}
@@ -535,7 +584,28 @@ export default function ProductDetail() {
       {cropTarget && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <h3 className="font-bold text-lg mb-4">Recortá tu foto{photoFormat && <span className="font-normal text-gray-500 text-sm"> · {photoFormat.label}</span>}</h3>
+            <h3 className="font-bold text-lg mb-4">
+              Recortá tu foto
+              {photoFormat && (
+                <span className="font-normal text-gray-500 text-sm">
+                  {' · '}{photoFormat.orientable ? (selectedVariant?.size || selectedVariant?.label || '') : photoFormat.label}
+                </span>
+              )}
+            </h3>
+
+            {photoFormat?.orientable && (
+              <div className="flex gap-2 mb-4">
+                {(['vertical', 'horizontal'] as Orientation[]).map(o => (
+                  <button
+                    key={o}
+                    onClick={() => { setCropOrientation(o); handleAspectChange(aspectFor(o)) }}
+                    className={`px-3 py-2 text-xs font-semibold border-2 transition-colors ${cropOrientation === o ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-gray-400'}`}
+                  >
+                    {o === 'vertical' ? 'Vertical' : 'Horizontal'}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className={`flex gap-2 mb-4 ${photoFormat ? 'hidden' : ''}`}>
               {ASPECT_PRESETS.map(p => (

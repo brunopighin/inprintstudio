@@ -4,6 +4,8 @@ import { PhotoFormat } from '../../utils/photoFormats'
 interface Props {
   src: string
   format?: PhotoFormat
+  // Pisa la proporción del formato (ej. copias que pueden ser verticales u horizontales)
+  aspect?: number
   className?: string
   imgClassName?: string
   style?: CSSProperties
@@ -11,9 +13,9 @@ interface Props {
 
 // Muestra la foto del cliente como va a quedar impresa: con la proporción del
 // formato y, si tiene, el marco blanco (Polaroid, Instax). Sin formato, cuadrada.
-export default function FramedPhoto({ src, format, className = '', imgClassName = '', style }: Props) {
+export default function FramedPhoto({ src, format, aspect, className = '', imgClassName = '', style }: Props) {
   const photo = (
-    <div className="w-full overflow-hidden bg-gray-100" style={{ aspectRatio: String(format?.aspect ?? 1) }}>
+    <div className="w-full overflow-hidden bg-gray-100" style={{ aspectRatio: String(aspect ?? format?.aspect ?? 1) }}>
       <img src={src} alt="" className={`w-full h-full object-cover ${imgClassName}`} />
     </div>
   )
