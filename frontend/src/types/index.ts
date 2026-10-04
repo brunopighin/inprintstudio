@@ -11,6 +11,7 @@ export interface ProductVariant {
   label: string
   size?: string
   paperType?: string
+  // Cuántas fotos sube el cliente para esta variante (vacío = 1)
   quantity?: number
   price: number
   stock: number
@@ -158,7 +159,10 @@ export interface OrderItem {
   variant?: ProductVariant
   quantity: number
   price: number
+  // Pedidos viejos: una sola foto como data URL
   photoUrl?: string
+  // JSON con las URLs de las fotos que subió el cliente
+  photoUrls?: string
   notes?: string
 }
 
@@ -206,10 +210,12 @@ export interface Banner {
 }
 
 export interface CartItem {
+  // Identifica la línea: dos packs del mismo producto con fotos distintas van separados
+  lineId: string
   product: Product
   variant?: ProductVariant
   quantity: number
-  photoUrl?: string
+  photoUrls: string[]
 }
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {

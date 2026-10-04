@@ -8,6 +8,7 @@ import { categoryRoutes } from './routes/categories'
 import { orderRoutes } from './routes/orders'
 import { paymentRoutes } from './routes/payments'
 import { bannerRoutes } from './routes/banners'
+import { uploadRoutes } from './routes/uploads'
 import { adminDashboardRoutes } from './routes/admin/dashboard'
 import { adminProductRoutes } from './routes/admin/products'
 import { adminCategoryRoutes } from './routes/admin/categories'
@@ -38,6 +39,7 @@ app.use('/api/categories', categoryRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/payments', paymentRoutes)
 app.use('/api/banners', bannerRoutes)
+app.use('/api/uploads', uploadRoutes)
 
 // Admin routes
 app.use('/api/admin/dashboard', adminDashboardRoutes)

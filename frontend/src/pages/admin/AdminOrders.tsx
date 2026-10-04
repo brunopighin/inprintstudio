@@ -26,13 +26,40 @@ const trackingOptionsFor = (order: Order): Carrier[] =>
     ? [...SELECTABLE_CARRIERS, order.trackingCarrier]
     : SELECTABLE_CARRIERS
 
-function photoFileName(photoUrl: string, orderNumber: string, productName?: string) {
-  const ext = /^data:image\/(\w+);/.exec(photoUrl)?.[1]?.replace('jpeg', 'jpg') || 'jpg'
+function photoFileName(photoUrl: string, orderNumber: string, productName?: string, index?: number) {
+  const ext = /^data:image\/(\w+);/.exec(photoUrl)?.[1]?.replace('jpeg', 'jpg')
+    || /\.(\w{3,4})(?:\?|$)/.exec(photoUrl)?.[1]?.toLowerCase()
+    || 'jpg'
   const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
   const slug = stripAccents(productName || 'foto')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-  return `${orderNumber}-${slug}.${ext}`
+  const suffix = index !== undefined ? `-${String(index + 1).padStart(2, '0')}` : ''
+  return `${orderNumber}-${slug}${suffix}.${ext}`
 }
+
+// Pedidos nuevos: lista de URLs subidas. Pedidos viejos: una foto como data URL en photoUrl.
+function itemPhotos(item: { photoUrl?: string; photoUrls?: string }): string[] {
+  try {
+    const urls = JSON.parse(item.photoUrls || '[]')
+    if (Array.isArray(urls) && urls.length) return urls
+  } catch { /* columna vacía o vieja */ }
+  return item.photoUrl ? [item.photoUrl] : []
+}
+
+// Las fotos están en otro dominio (el backend), y ahí el atributo download no
+// funciona: se bajan como blob para que se guarden con un nombre ordenado.
+async function downloadPhotos(urls: string[], orderNumber: string, productName?: string) {
+  for (const [i, url] of urls.entries()) {
+    const blob = await fetch(url).then(r => r.blob())
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = photoFileName(url, orderNumber, productName, urls.length > 1 ? i : undefined)
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+}
+
+const MAX_THUMBS = 6
 
 const SHIPPING_METHOD_LABELS: Record<string, string> = {
   shipping: 'Envío a domicilio',
@@ -284,27 +311,47 @@ export default function AdminOrders() {
                             <div>
                               <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Productos</p>
                               <div className="space-y-2">
-                                {order.items?.map(item => (
-                                  <div key={item.id} className="flex items-start justify-between gap-3 text-sm">
-                                    <div className="flex items-start gap-2">
-                                      {item.photoUrl && (
-                                        <a
-                                          href={item.photoUrl}
-                                          download={photoFileName(item.photoUrl, order.orderNumber, item.product?.name)}
-                                          title="Descargar foto que subió el cliente"
-                                          className="relative group shrink-0"
-                                        >
-                                          <img src={item.photoUrl} alt="Foto del cliente" className="w-10 h-10 object-cover border border-gray-300" />
-                                          <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
-                                            <Download size={14} className="text-white opacity-0 group-hover:opacity-100" />
-                                          </span>
-                                        </a>
+                                {order.items?.map(item => {
+                                  const photos = itemPhotos(item)
+                                  return (
+                                    <div key={item.id} className="text-sm">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <span className="text-gray-700">{item.product?.name} {item.variant && `(${item.variant.label})`} ×{item.quantity}</span>
+                                        <span className="font-medium whitespace-nowrap">${(item.price * item.quantity).toLocaleString('es-AR')}</span>
+                                      </div>
+                                      {photos.length > 0 && (
+                                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                          {photos.slice(0, MAX_THUMBS).map((url, i) => (
+                                            <button
+                                              key={i}
+                                              type="button"
+                                              onClick={() => downloadPhotos([url], order.orderNumber, item.product?.name)}
+                                              title="Descargar esta foto"
+                                              className="relative group shrink-0"
+                                            >
+                                              <img src={url} alt="Foto del cliente" loading="lazy" className="w-10 h-10 object-cover border border-gray-300" />
+                                              <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                                                <Download size={14} className="text-white opacity-0 group-hover:opacity-100" />
+                                              </span>
+                                            </button>
+                                          ))}
+                                          {photos.length > MAX_THUMBS && (
+                                            <span className="w-10 h-10 flex items-center justify-center bg-gray-200 text-xs font-semibold text-gray-600">+{photos.length - MAX_THUMBS}</span>
+                                          )}
+                                          {photos.length > 1 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => downloadPhotos(photos, order.orderNumber, item.product?.name)}
+                                              className="ml-1 text-xs font-semibold text-gray-700 hover:text-black inline-flex items-center gap-1 border border-gray-300 px-2 py-1 bg-white"
+                                            >
+                                              <Download size={12} /> Descargar las {photos.length} fotos
+                                            </button>
+                                          )}
+                                        </div>
                                       )}
-                                      <span className="text-gray-700">{item.product?.name} {item.variant && `(${item.variant.label})`} ×{item.quantity}</span>
                                     </div>
-                                    <span className="font-medium whitespace-nowrap">${(item.price * item.quantity).toLocaleString('es-AR')}</span>
-                                  </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             </div>
                             <div>

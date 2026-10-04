@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ShoppingBag, Upload, Check, Crop as CropIcon } from 'lucide-react'
+import { ShoppingBag, Upload, Check, Crop as CropIcon, Loader2, RotateCw, X } from 'lucide-react'
 import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import api from '../services/api'
@@ -25,7 +25,7 @@ function centeredCropFor(aspect: number | undefined, mediaWidth: number, mediaHe
   )
 }
 
-function getCroppedDataUrl(image: HTMLImageElement, crop: PixelCrop): string {
+function getCroppedBlob(image: HTMLImageElement, crop: PixelCrop): Promise<Blob | null> {
   const canvas = document.createElement('canvas')
   const scaleX = image.naturalWidth / image.width
   const scaleY = image.naturalHeight / image.height
@@ -37,8 +37,23 @@ function getCroppedDataUrl(image: HTMLImageElement, crop: PixelCrop): string {
     crop.x * scaleX, crop.y * scaleY, crop.width * scaleX, crop.height * scaleY,
     0, 0, canvas.width, canvas.height
   )
-  return canvas.toDataURL('image/jpeg', 0.92)
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
 }
+
+// Una foto del cliente. Se sube al servidor apenas se elige (o apenas se recorta),
+// así el carrito y el pedido solo llevan URLs aunque sea un pack de 100 fotos.
+interface CustomerPhoto {
+  id: number
+  original: File
+  originalSrc: string // object URL del original, para poder volver a recortar
+  previewSrc: string // object URL de lo que se sube (recortado o no)
+  url?: string
+  status: 'cropping' | 'uploading' | 'done' | 'error'
+  error?: string
+}
+
+const UPLOAD_CONCURRENCY = 3
+let photoCounter = 0
 
 export default function ProductDetail() {
   const { slug } = useParams()
@@ -48,12 +63,11 @@ export default function ProductDetail() {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [currentImg, setCurrentImg] = useState(0)
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
-  const [rawPhotoSrc, setRawPhotoSrc] = useState<string | null>(null)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photos, setPhotos] = useState<CustomerPhoto[]>([])
+  const [photoNotice, setPhotoNotice] = useState('')
   const [added, setAdded] = useState(false)
 
-  const [cropModalOpen, setCropModalOpen] = useState(false)
+  const [cropTargetId, setCropTargetId] = useState<number | null>(null)
   const [aspectPreset, setAspectPreset] = useState<number | undefined>(2 / 3)
   const [crop, setCrop] = useState<Crop>()
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>()
@@ -70,22 +84,88 @@ export default function ProductDetail() {
       .finally(() => setLoading(false))
   }, [slug])
 
-  const openCropperFor = (src: string) => {
-    setRawPhotoSrc(src)
+  // Cuántas fotos pide la variante elegida (campo "Fotos que sube el cliente" del admin)
+  const requiredPhotos = Math.max(1, selectedVariant?.quantity || 1)
+  const cropTarget = photos.find(p => p.id === cropTargetId)
+
+  const updatePhoto = (id: number, patch: Partial<CustomerPhoto>) =>
+    setPhotos(ps => ps.map(p => (p.id === id ? { ...p, ...patch } : p)))
+
+  const uploadPhoto = async (id: number, blob: Blob, filename: string) => {
+    updatePhoto(id, { status: 'uploading', error: undefined })
+    try {
+      const data = new FormData()
+      data.append('photo', blob, filename)
+      const { data: res } = await api.post('/uploads/photo', data)
+      updatePhoto(id, { status: 'done', url: res.url })
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'No se pudo subir'
+      updatePhoto(id, { status: 'error', error: message })
+    }
+  }
+
+  const openCropperFor = (id: number) => {
+    setCropTargetId(id)
     setAspectPreset(2 / 3)
     setCrop(undefined)
     setCompletedCrop(undefined)
-    setCropModalOpen(true)
   }
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPhotoFile(file)
-    const reader = new FileReader()
-    reader.onload = ev => openCropperFor(ev.target?.result as string)
-    reader.readAsDataURL(file)
+  const releasePhoto = (p: CustomerPhoto) => {
+    URL.revokeObjectURL(p.originalSrc)
+    if (p.previewSrc !== p.originalSrc) URL.revokeObjectURL(p.previewSrc)
+  }
+
+  const removePhoto = (id: number) => {
+    setPhotos(ps => {
+      const p = ps.find(x => x.id === id)
+      if (p) releasePhoto(p)
+      return ps.filter(x => x.id !== id)
+    })
+  }
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
     e.target.value = ''
+    if (!files.length) return
+    const slots = requiredPhotos - photos.length
+    const accepted = files.slice(0, Math.max(0, slots))
+    setPhotoNotice(files.length > accepted.length
+      ? `Elegiste ${files.length} fotos y esta opción lleva ${requiredPhotos}: se usaron las primeras ${accepted.length}.`
+      : '')
+    if (!accepted.length) return
+
+    const entries: CustomerPhoto[] = accepted.map(file => {
+      const src = URL.createObjectURL(file)
+      return { id: ++photoCounter, original: file, originalSrc: src, previewSrc: src, status: requiredPhotos === 1 ? 'cropping' : 'uploading' }
+    })
+    setPhotos(ps => [...ps, ...entries])
+
+    // Con una sola foto se mantiene el flujo de siempre: recortar y después subir.
+    // En un pack se suben directo y el recorte queda opcional por foto.
+    if (requiredPhotos === 1) {
+      openCropperFor(entries[0].id)
+      return
+    }
+    const queue = [...entries]
+    const worker = async () => {
+      for (let next = queue.shift(); next; next = queue.shift()) {
+        await uploadPhoto(next.id, next.original, next.original.name)
+      }
+    }
+    await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, worker))
+  }
+
+  const retryPhoto = async (p: CustomerPhoto) => {
+    // Se reintenta con lo mismo que se había querido subir (incluido el recorte)
+    const blob = await fetch(p.previewSrc).then(r => r.blob())
+    await uploadPhoto(p.id, blob, p.original.name)
+  }
+
+  const cancelCrop = () => {
+    // Si la foto todavía no se había subido nunca, cancelar el recorte es no usarla
+    if (cropTarget?.status === 'cropping') removePhoto(cropTarget.id)
+    setCropTargetId(null)
   }
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -100,15 +180,33 @@ export default function ProductDetail() {
     }
   }
 
-  const confirmCrop = () => {
-    if (!imgRef.current || !completedCrop?.width || !completedCrop?.height) return
-    setPhotoPreview(getCroppedDataUrl(imgRef.current, completedCrop))
-    setCropModalOpen(false)
+  const confirmCrop = async () => {
+    if (!cropTarget || !imgRef.current || !completedCrop?.width || !completedCrop?.height) return
+    const blob = await getCroppedBlob(imgRef.current, completedCrop)
+    if (!blob) return
+    if (cropTarget.previewSrc !== cropTarget.originalSrc) URL.revokeObjectURL(cropTarget.previewSrc)
+    updatePhoto(cropTarget.id, { previewSrc: URL.createObjectURL(blob) })
+    setCropTargetId(null)
+    await uploadPhoto(cropTarget.id, blob, cropTarget.original.name.replace(/\.\w+$/, '') + '-recorte.jpg')
   }
 
+  const uploadingCount = photos.filter(p => p.status === 'uploading' || p.status === 'cropping').length
+  const failedCount = photos.filter(p => p.status === 'error').length
+  // Las fotos siguen siendo opcionales (se pueden mandar después), pero si empezó a cargarlas tienen que ser justas
+  const photoProblem =
+    uploadingCount ? `Subiendo fotos (${photos.length - uploadingCount}/${photos.length})...`
+    : failedCount ? `${failedCount === 1 ? 'Una foto no se pudo subir' : `${failedCount} fotos no se pudieron subir`}: reintentá o quitala.`
+    : photos.length > requiredPhotos ? `Esta opción lleva ${requiredPhotos} ${requiredPhotos === 1 ? 'foto' : 'fotos'}: quitá ${photos.length - requiredPhotos}.`
+    : photos.length > 0 && photos.length < requiredPhotos ? `Te ${requiredPhotos - photos.length === 1 ? 'falta 1 foto' : `faltan ${requiredPhotos - photos.length} fotos`} (cargaste ${photos.length} de ${requiredPhotos}).`
+    : ''
+
   const handleAddToCart = () => {
-    if (!product) return
-    addItem(product, selectedVariant || undefined, quantity, photoPreview || undefined)
+    if (!product || photoProblem) return
+    addItem(product, selectedVariant || undefined, quantity, photos.map(p => p.url!))
+    // Las fotos ya quedaron en el carrito; se limpia para que el próximo pack arranque de cero
+    photos.forEach(releasePhoto)
+    setPhotos([])
+    setPhotoNotice('')
     setAdded(true)
     setTimeout(() => setAdded(false), 2000)
   }
@@ -136,6 +234,11 @@ export default function ProductDetail() {
   const images = JSON.parse(product.images || '[]')
   const displayImages = images.length > 0 ? images : ['https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80']
   const currentPrice = selectedVariant?.price ?? product.basePrice
+  // Con una sola foto se muestra grande en la galería, como antes; en un pack se ven en la grilla
+  // Si cambió de un pack a una opción de 1 foto con varias ya cargadas, se sigue viendo la grilla para poder quitar las que sobran
+  const singleMode = requiredPhotos === 1 && photos.length <= 1
+  const singlePhoto = singleMode && photos[0]?.status !== 'cropping' ? photos[0] : undefined
+  const photoPreview = singlePhoto?.previewSrc
 
   return (
     <div className="min-h-screen">
@@ -228,41 +331,101 @@ export default function ProductDetail() {
 
             {/* Photo upload */}
             <div className="mb-6">
-              <label className="label">Cargá tu foto</label>
-              <label className="flex flex-col items-center gap-3 border-2 border-dashed border-gray-300 p-6 cursor-pointer hover:border-black transition-colors group">
-                {photoPreview ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-16 h-16 overflow-hidden">
-                      <img src={photoPreview} alt="preview" className="w-full h-full object-cover" />
+              {singleMode ? (
+                <>
+                  <label className="label">Cargá tu foto</label>
+                  {singlePhoto ? (
+                    <div className="flex items-center gap-3 border-2 border-gray-200 p-4">
+                      <div className="w-16 h-16 overflow-hidden flex-shrink-0">
+                        <img src={singlePhoto.previewSrc} alt="preview" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="min-w-0">
+                        {singlePhoto.status === 'done' && <p className="text-sm font-semibold text-green-700 flex items-center gap-1"><Check size={14} /> Foto cargada</p>}
+                        {singlePhoto.status === 'uploading' && <p className="text-sm font-semibold text-gray-600 flex items-center gap-1"><Loader2 size={14} className="animate-spin" /> Subiendo foto...</p>}
+                        {singlePhoto.status === 'error' && <p className="text-sm font-semibold text-red-600">{singlePhoto.error}</p>}
+                        <p className="text-xs text-gray-500 truncate">{singlePhoto.original.name}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-green-700 flex items-center gap-1"><Check size={14} /> Foto cargada</p>
-                      <p className="text-xs text-gray-500">{photoFile?.name}</p>
+                  ) : (
+                    <label className="flex flex-col items-center gap-3 border-2 border-dashed border-gray-300 p-6 cursor-pointer hover:border-black transition-colors group">
+                      <Upload size={24} className="text-gray-400 group-hover:text-black transition-colors" />
+                      <div className="text-center">
+                        <p className="text-sm font-medium">Subí tu imagen</p>
+                        <p className="text-xs text-gray-400 mt-1">JPG, PNG o HEIC · Máx. 25 MB</p>
+                      </div>
+                      <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                    </label>
+                  )}
+                  {singlePhoto && (
+                    <div className="flex items-center gap-3 mt-2">
+                      <button onClick={() => openCropperFor(singlePhoto.id)} disabled={singlePhoto.status === 'uploading'}
+                        className="text-xs text-gray-500 hover:text-black flex items-center gap-1 transition-colors disabled:opacity-50">
+                        <CropIcon size={12} /> Recortar de nuevo
+                      </button>
+                      {singlePhoto.status === 'error' && (
+                        <button onClick={() => retryPhoto(singlePhoto)} className="text-xs text-gray-500 hover:text-black flex items-center gap-1 transition-colors">
+                          <RotateCw size={12} /> Reintentar
+                        </button>
+                      )}
+                      <button onClick={() => removePhoto(singlePhoto.id)}
+                        className="text-xs text-gray-400 hover:text-red-600 transition-colors">
+                        Eliminar foto
+                      </button>
                     </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <label className="label mb-0">{requiredPhotos === 1 ? 'Cargá tu foto' : `Cargá tus ${requiredPhotos} fotos`}</label>
+                    <span className={`text-sm font-bold ${photos.length === requiredPhotos ? 'text-green-700' : photos.length > requiredPhotos ? 'text-red-600' : 'text-gray-500'}`}>
+                      {photos.length}/{requiredPhotos}
+                    </span>
                   </div>
-                ) : (
-                  <>
-                    <Upload size={24} className="text-gray-400 group-hover:text-black transition-colors" />
-                    <div className="text-center">
-                      <p className="text-sm font-medium">Subí tu imagen</p>
-                      <p className="text-xs text-gray-400 mt-1">JPG, PNG o HEIC · Máx. 20 MB</p>
+                  {photos.length > 0 && (
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-3">
+                      {photos.map(p => (
+                        <div key={p.id} className={`relative aspect-square bg-gray-100 overflow-hidden border-2 ${p.status === 'error' ? 'border-red-500' : 'border-transparent'}`}>
+                          <img src={p.previewSrc} alt="" className={`w-full h-full object-cover ${p.status === 'uploading' ? 'opacity-50' : ''}`} />
+                          {p.status === 'uploading' && (
+                            <span className="absolute inset-0 flex items-center justify-center"><Loader2 size={18} className="animate-spin text-black" /></span>
+                          )}
+                          {p.status === 'error' && (
+                            <button onClick={() => retryPhoto(p)} title={p.error} aria-label="Reintentar"
+                              className="absolute inset-0 flex items-center justify-center bg-white/60 text-red-600">
+                              <RotateCw size={18} />
+                            </button>
+                          )}
+                          <button onClick={() => removePhoto(p.id)} aria-label="Quitar foto"
+                            className="absolute top-0 right-0 bg-black/70 text-white p-0.5 hover:bg-red-600 transition-colors">
+                            <X size={12} />
+                          </button>
+                          {p.status === 'done' && (
+                            <button onClick={() => openCropperFor(p.id)} aria-label="Recortar"
+                              className="absolute bottom-0 left-0 bg-black/70 text-white p-1 hover:bg-black transition-colors">
+                              <CropIcon size={12} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  </>
-                )}
-                <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-              </label>
-              {photoPreview && (
-                <div className="flex items-center gap-3 mt-2">
-                  <button onClick={() => rawPhotoSrc && openCropperFor(rawPhotoSrc)}
-                    className="text-xs text-gray-500 hover:text-black flex items-center gap-1 transition-colors">
-                    <CropIcon size={12} /> Recortar de nuevo
-                  </button>
-                  <button onClick={() => { setPhotoFile(null); setPhotoPreview(null); setRawPhotoSrc(null) }}
-                    className="text-xs text-gray-400 hover:text-red-600 transition-colors">
-                    Eliminar foto
-                  </button>
-                </div>
+                  )}
+                  {photos.length < requiredPhotos && (
+                    <label className="flex flex-col items-center gap-2 border-2 border-dashed border-gray-300 p-5 cursor-pointer hover:border-black transition-colors group">
+                      <Upload size={22} className="text-gray-400 group-hover:text-black transition-colors" />
+                      <div className="text-center">
+                        <p className="text-sm font-medium">
+                          {photos.length === 0 ? `Elegí tus ${requiredPhotos} fotos` : `Agregá ${requiredPhotos - photos.length} más`}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">Podés seleccionar varias a la vez · JPG, PNG o HEIC · Máx. 25 MB c/u</p>
+                      </div>
+                      <input type="file" accept="image/*" multiple onChange={handlePhotoChange} className="hidden" />
+                    </label>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">Tocá <CropIcon size={10} className="inline" /> en una foto si querés recortarla.</p>
+                </>
               )}
+              {photoNotice && <p className="text-xs text-gray-500 mt-2">{photoNotice}</p>}
             </div>
 
             {/* Quantity */}
@@ -278,7 +441,7 @@ export default function ProductDetail() {
             {/* Add to cart */}
             <button
               onClick={handleAddToCart}
-              disabled={product.variants.length > 0 && !selectedVariant}
+              disabled={(product.variants.length > 0 && !selectedVariant) || !!photoProblem}
               className={`btn-primary w-full py-4 text-base ${added ? 'bg-green-800' : ''}`}
             >
               {added ? (
@@ -288,8 +451,10 @@ export default function ProductDetail() {
               )}
             </button>
 
-            {product.variants.length > 0 && !selectedVariant && (
+            {product.variants.length > 0 && !selectedVariant ? (
               <p className="text-xs text-center text-red-500 mt-2">Seleccioná una opción para continuar</p>
+            ) : photoProblem && (
+              <p className={`text-xs text-center mt-2 ${uploadingCount ? 'text-gray-500' : 'text-red-500'}`}>{photoProblem}</p>
             )}
 
             {/* Info chips */}
@@ -303,7 +468,7 @@ export default function ProductDetail() {
       </div>
 
       {/* Crop modal */}
-      {cropModalOpen && rawPhotoSrc && (
+      {cropTarget && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
             <h3 className="font-bold text-lg mb-4">Recortá tu foto</h3>
@@ -322,12 +487,12 @@ export default function ProductDetail() {
 
             <div className="flex justify-center bg-gray-100 max-h-[55vh] overflow-auto">
               <ReactCrop crop={crop} onChange={c => setCrop(c)} onComplete={c => setCompletedCrop(c)} aspect={aspectPreset}>
-                <img ref={imgRef} src={rawPhotoSrc} onLoad={handleImageLoad} alt="Recortar" style={{ maxHeight: '55vh' }} />
+                <img ref={imgRef} src={cropTarget.originalSrc} onLoad={handleImageLoad} alt="Recortar" style={{ maxHeight: '55vh' }} />
               </ReactCrop>
             </div>
 
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setCropModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={cancelCrop} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={confirmCrop} className="btn-primary flex-1">Usar esta foto</button>
             </div>
           </div>

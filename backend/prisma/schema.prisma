@@ -139,6 +139,7 @@ model OrderItem {
   quantity  Int
   price     Float
   photoUrl  String?
+  photoUrls String          @default("[]")
   notes     String?
 }
 

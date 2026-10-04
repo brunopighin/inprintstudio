@@ -518,8 +518,8 @@ export default function AdminProducts() {
                         <input className="input-base py-2 text-sm" placeholder="ej: Brillante" value={v.paperType} onChange={e => setVariant(i, 'paperType', e.target.value)} />
                       </div>
                       <div className="col-span-2">
-                        <span className="block text-[11px] text-gray-500 mb-0.5">Cantidad</span>
-                        <input className="input-base py-2 text-sm" type="number" placeholder="ej: 10" value={v.quantity} onChange={e => setVariant(i, 'quantity', e.target.value)} />
+                        <span className="block text-[11px] text-gray-500 mb-0.5">Fotos que sube el cliente</span>
+                        <input className="input-base py-2 text-sm" type="number" placeholder="1 (ej: 10 para un pack de 10 fotos)" min="1" value={v.quantity} onChange={e => setVariant(i, 'quantity', e.target.value)} />
                       </div>
                       <div className="col-span-2 pt-1 border-t border-gray-100 mt-1">
                         <span className="block text-[11px] text-gray-500 mb-0.5">Paquete para el envío: peso (g), largo, ancho y alto (cm)</span>

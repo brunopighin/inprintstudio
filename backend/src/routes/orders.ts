@@ -8,6 +8,7 @@ import { getAgencies, toProvinceCode, isConfigured as isCorreoArgentinoConfigure
 import { getPaymentMethod, calcAdjustment } from '../utils/paymentMethods'
 import { isValidArgentinePhone } from '../utils/phone'
 import postalCodes from '../data/postalCodes.json'
+import { CUSTOMER_PHOTOS_SUBDIR } from './uploads'
 
 const router = Router()
 const prisma = new PrismaClient()
@@ -29,8 +30,19 @@ interface CartItemInput {
   variantId?: string
   quantity: number
   photoUrl?: string
+  photoUrls?: string[]
   notes?: string
 }
+
+const MAX_PHOTOS_PER_ITEM = 200
+
+// Solo URLs de fotos subidas por /api/uploads/photo, no cualquier link externo
+const cleanPhotoUrls = (urls: unknown): string[] =>
+  Array.isArray(urls)
+    ? urls
+      .filter((u): u is string => typeof u === 'string' && u.includes(`/uploads/${CUSTOMER_PHOTOS_SUBDIR}/`))
+      .slice(0, MAX_PHOTOS_PER_ITEM)
+    : []
 
 async function resolveItems(items: CartItemInput[]) {
   let subtotal = 0
@@ -58,6 +70,7 @@ async function resolveItems(items: CartItemInput[]) {
       quantity: item.quantity,
       price,
       photoUrl: item.photoUrl || null,
+      photoUrls: JSON.stringify(cleanPhotoUrls(item.photoUrls)),
       notes: item.notes || null,
     })
     preferenceItems.push({

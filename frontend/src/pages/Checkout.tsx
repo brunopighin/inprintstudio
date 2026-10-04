@@ -241,7 +241,7 @@ export default function Checkout() {
         productId: i.product.id,
         variantId: i.variant?.id,
         quantity: i.quantity,
-        photoUrl: i.photoUrl,
+        photoUrls: i.photoUrls,
       }))
       const { data } = await api.post('/orders', {
         ...form,
@@ -606,6 +606,9 @@ export default function Checkout() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold leading-tight">{item.product.name}</p>
                         {item.variant && <p className="text-xs text-gray-400">{item.variant.label}</p>}
+                        {item.photoUrls.length > 0 && (
+                          <p className="text-xs text-gray-400">📷 {item.photoUrls.length === 1 ? '1 foto' : `${item.photoUrls.length} fotos`}</p>
+                        )}
                         <p className="text-xs text-gray-500">x{item.quantity}</p>
                       </div>
                       <p className="text-sm font-bold flex-shrink-0">{formatPrice(price * item.quantity)}</p>

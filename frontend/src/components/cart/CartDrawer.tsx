@@ -51,12 +51,12 @@ export default function CartDrawer() {
             </div>
           ) : (
             <div className="px-6 flex flex-col gap-5">
-              {items.map((item, idx) => {
+              {items.map(item => {
                 const price = item.variant?.price ?? item.product.basePrice
                 const images = JSON.parse(item.product.images || '[]')
                 const imageUrl = images[0] || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200&q=60'
                 return (
-                  <div key={`${item.product.id}-${item.variant?.id}-${idx}`} className="flex gap-4">
+                  <div key={item.lineId} className="flex gap-4">
                     <div className="w-20 h-20 bg-gray-100 flex-shrink-0 overflow-hidden">
                       <img src={imageUrl} alt={item.product.name} className="w-full h-full object-cover" />
                     </div>
@@ -65,20 +65,20 @@ export default function CartDrawer() {
                       {item.variant && (
                         <p className="text-xs text-gray-500 mt-0.5">{item.variant.label}</p>
                       )}
-                      {item.photoUrl && (
-                        <p className="text-xs text-gray-500 mt-0.5">📷 Foto cargada</p>
+                      {item.photoUrls.length > 0 && (
+                        <p className="text-xs text-gray-500 mt-0.5">📷 {item.photoUrls.length === 1 ? 'Foto cargada' : `${item.photoUrls.length} fotos cargadas`}</p>
                       )}
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center border border-gray-200">
                           <button
-                            onClick={() => updateQuantity(item.product.id, item.variant?.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
                             className="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
                           >
                             <Minus size={12} />
                           </button>
                           <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
                           <button
-                            onClick={() => updateQuantity(item.product.id, item.variant?.id, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
                             className="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
                           >
                             <Plus size={12} />
@@ -88,7 +88,7 @@ export default function CartDrawer() {
                       </div>
                     </div>
                     <button
-                      onClick={() => removeItem(item.product.id, item.variant?.id)}
+                      onClick={() => removeItem(item.lineId)}
                       className="self-start p-1 text-gray-300 hover:text-red-500 transition-colors"
                     >
                       <Trash2 size={15} />
