@@ -7,6 +7,7 @@ import api from '../services/api'
 import { Product, ProductVariant } from '../types'
 import { useCart } from '../context/CartContext'
 import ImageSlider from '../components/product/ImageSlider'
+import ProductDescription from '../components/product/ProductDescription'
 
 const ASPECT_PRESETS: { label: string; value: number | undefined }[] = [
   { label: 'Vertical', value: 2 / 3 },
@@ -202,7 +203,9 @@ export default function ProductDetail() {
             </div>
 
             {/* Description */}
-            <p className="text-gray-600 leading-relaxed mb-8 text-sm">{product.description}</p>
+            <div className="mb-8">
+              <ProductDescription text={product.description} />
+            </div>
 
             {/* Variants */}
             {product.variants.length > 0 && (

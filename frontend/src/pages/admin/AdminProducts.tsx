@@ -365,7 +365,8 @@ export default function AdminProducts() {
               </div>
               <div>
                 <label className="label">Descripción</label>
-                <textarea className="input-base resize-none" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                <textarea className="input-base resize-y text-sm" rows={10} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                <p className="text-xs text-gray-400 mt-1">Dejá una línea en blanco entre párrafos. Las líneas que empiezan con • o - se muestran como lista, y una línea corta que termina en ":" (ej: Características:) aparece como título.</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
