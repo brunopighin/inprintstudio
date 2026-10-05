@@ -7,9 +7,11 @@ import { WHATSAPP_NUMBER, whatsappLink } from '../../config'
 // que se sepa por cuál consultan.
 export default function WhatsAppButton() {
   const { pathname } = useLocation()
+  // El espacio después de "es" queda para que el cliente escriba su nombre
+  const greeting = 'Hola, mi nombre es  , quiero hacer una consulta'
   const message = pathname.startsWith('/producto/')
-    ? `¡Hola! Quería hacer una consulta sobre este producto: ${window.location.origin}${pathname}`
-    : '¡Hola! Quería hacer una consulta.'
+    ? `${greeting} sobre este producto: ${window.location.origin}${pathname}`
+    : greeting
 
   return (
     <a
